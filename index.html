@@ -1,0 +1,78 @@
+<html>
+    <head>
+        <title>Transcript to PNG</title>
+    </head>
+    <body>
+        <canvas id="screen">
+        </canvas>
+        <form>
+            <input type="file" id="input" multiple>
+            <p id="fileContents"></p>
+        </form>
+        <script src="/socket.io/socket.io.js"></script>
+        <script>
+            var socket = io();
+            let canvas = document.getElementById('screen')
+            let ctx = canvas.getContext('2d')
+            let size = 500
+
+            canvas.style.width = size + "px"
+            canvas.style.height = size + "px"
+            let scale = window.devicePixelRatio || 1
+            canvas.width = size * scale
+            canvas.height = size * scale
+            ctx.scale(scale, scale)
+
+            let fps = 30
+            const inputElement = document.getElementById("input")
+            const handleFiles = (event) => {
+                // do stuff with the files
+                let files = event.target.files
+                let file = files[0]
+                if (file) {
+                    const reader = new FileReader()
+                    reader.readAsText(file, "UTF-8")
+                    reader.onload = (e) => {
+                        // document.getElementById("fileContents").innerHTML = e.target.result
+                        let fileContents = JSON.parse(e.target.result)
+                        //document.getElementById("fileContents").innerHTML = fileContents
+                        let transcript = fileContents.transcript
+                        let words = fileContents.words
+                        let start = words[0].start
+                        const frames = []
+
+                        const getWordDuration = (word) => { return word.end - word.start }
+                        const renderWordFrames = (word, duration) => {
+                            let frameCount = Math.round(duration * fps)
+            
+                            for (let i = 0; i < frameCount; i++) {
+                                ctx.clearRect(0,0,size, size)
+                                ctx.font = "50pt Arial";
+                                ctx.textAlign = "center";
+                                ctx.fillText(word, size/2, size/2)
+                                frames.push(document.getElementById('screen').toDataURL().split(',')[1])
+                            }
+                        }
+                        
+                        words.forEach((word) => {
+                            if (word.start < 40 ) { 
+                                let duration = getWordDuration(word)
+                                renderWordFrames(word.alignedWord, duration)
+                            }
+                        });
+                        console.log(frames[0])
+                        socket.emit('render-frame', {
+                                    frame_array: frames
+                        });
+                    }
+
+                    reader.onerror = (e) => {
+                        document.getElementById("fileContents").innerHTML = "error reading file"
+                    }
+                }
+                // file.stream and then JSON parse?
+            }
+            inputElement.addEventListener("change", handleFiles, false)
+        </script>
+    </body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "canvas-export",
+  "version": "1.0.0",
+  "description": "converting canvas frames to image files",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [
+    "canvas",
+    "nodejs",
+    "socket.io"
+  ],
+  "author": "vishal bakshi",
+  "license": "ISC",
+  "dependencies": {
+    "@ffmpeg-installer/ffmpeg": "^1.0.19",
+    "cors": "^2.8.5",
+    "express": "^4.17.1",
+    "ffmpeg": "0.0.4",
+    "jszip": "^3.2.2",
+    "socket.io": "^2.2.0"
+  }
+}
