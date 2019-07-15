@@ -1,77 +1,266 @@
 <html>
     <head>
         <title>Transcript to PNG</title>
+        <link rel="stylesheet" type="text/css" href="/index.css">
     </head>
     <body>
+        <p id="message">hello</p>
+        <div id="input-container">
+            <label for="transcript-upload-input">
+                lyrics (.json, <a href="#" id="json-example" >example)</a>
+                <input type="file" id="transcript-upload" name="transcript-upload-input" multiple>
+            </label>
+            <!-- add this later for animations
+                <label for="song-upload-input">
+                    full song wave file
+                    <input type="file" id="song-upload" name="song-upload-input">
+                </label>
+            -->
+            <label for="fps">
+                video frame rate (fps)
+                <input type="text" id="framerate-input" name="fps">
+            </label>
+            <label for="wpf">
+                words per frame
+                <input type="number" id="wordrate-input" name="wpf">
+            </label>
+            <label for="song-length-input">
+                full song length (seconds)
+                <input type="number" id="song-length" name="song-length-input">
+            </label>
+            <label for="width">
+                video width (px)
+                <input type="text" id="resolution-width-input" name="width">
+            </label>
+            <label for="height">
+                video height (px)
+                <input type="text" id="resolution-height-input" name="height">
+            </label>
+            <!-- this should eventually trigger the whole process
+                <label for="submit">
+                    generate lyric frames
+                    <button name="submit" id="submit">generate</button>
+                </label>
+                
+            -->
+        </div>
         <canvas id="screen">
         </canvas>
-        <form>
-            <input type="file" id="input" multiple>
-            <p id="fileContents"></p>
-        </form>
-        <script src="/socket.io/socket.io.js"></script>
+        <script type="text/javascript" src="/jszip.min.js"></script>
+        <script type="text/javascript" src="/FileSaver.js"></script>
         <script>
-            var socket = io();
+            const zip = new JSZip()
             let canvas = document.getElementById('screen')
             let ctx = canvas.getContext('2d')
-            let size = 500
 
-            canvas.style.width = size + "px"
-            canvas.style.height = size + "px"
+            // Prepare a folder for the frame PNGs
+            const img = zip.folder("images")
+
+            // Default Resolution 
+            let resolution = { height: 160, width: 320}
+
+            // Canvas sizing
             let scale = window.devicePixelRatio || 1
-            canvas.width = size * scale
-            canvas.height = size * scale
+            canvas.style.width = resolution.width + "px"
+            canvas.style.height = resolution.height + "px"
+            canvas.width = resolution.width * scale
+            canvas.height = resolution.height * scale
             ctx.scale(scale, scale)
 
+            // User-Defined Resolution
+            const resolutionWidthInput = document.getElementById('resolution-width-input')
+            const resolutionHeightInput = document.getElementById('resolution-height-input')
+            const handleResolutionInput = (e) => {
+                resolution[e.target.name] = e.target.value
+                canvas.style[e.target.name] = e.target.value
+                canvas[e.target.name] = e.target.value * scale
+            }
+            resolutionWidthInput.addEventListener("change", handleResolutionInput, false)
+            resolutionHeightInput.addEventListener("change", handleResolutionInput, false)
+
+            // Default Frame Rate
             let fps = 30
-            const inputElement = document.getElementById("input")
+            
+            // Default Song Length
+            let songLength = 60
+            let songFrameLength = fps * songLength
+
+            // User-Defined Resolution
+            const frameRateInput = document.getElementById('framerate-input')
+            const handleFrameRateInput = (e) => {
+                fps = e.target.value
+                songFrameLength = fps * songLength
+            }
+            frameRateInput.addEventListener("change", handleFrameRateInput, false)
+            
+            // Get Song data
+            let songLengthInput = document.getElementById("song-length")
+            songLength = songLengthInput.value
+            songFrameLength = fps * songLength
+            const handleSongInput = (e) => {
+                songLength = e.target.value
+                songFrameLength = fps * songLength
+            }
+            songLengthInput.addEventListener("change", handleSongInput, false)
+            
+            // Default words per frame
+            let wordsPerFrame = 3
+
+            // User-Defined Words Per Frame
+            let wordsPerFrameInput = document.getElementById("wordrate-input")
+            const handleWordsPerFrameInput = (e) => {
+                wordsPerFrame = e.target.value
+                console.log(wordsPerFrame)
+            }
+            wordsPerFrameInput.addEventListener("change", handleWordsPerFrameInput, false)
+
+            // Transcript File Upload
+            const inputElement = document.getElementById("transcript-upload")
+
+            /** 
+             * Restructure JSON file based on words per frame
+             * @param {Array} words array of words from JSON file
+             * @param {number} wordsPerFrame number of words per frame
+             * return {Array} array of word with wordsets as word.alignedWord
+             **/
+            const prepareWordData = (words, wordsPerFrame) => {
+                let wordCount = 0
+                restructuredWordSet = []
+                restructuredWord = {
+                    alignedWord: "",
+                    case: "success",
+                    end: null,
+                    start: null
+                }
+
+                words.forEach((word) => {
+                    if (word.case !== "success") { return }
+
+                    wordCount++
+                    console.log(wordCount, wordsPerFrame)
+                    // start time of the first word should be the start time of the word set
+                    if (wordCount === 1) { restructuredWord.start = word.start }
+
+                    // add words to the word set
+                    if (wordCount < wordsPerFrame) {
+                        restructuredWord.alignedWord += ' ' + word.alignedWord
+                    }
+
+                    // end time of the last word should be the end time of the word set
+                    if (wordCount == wordsPerFrame) {
+                        restructuredWord.alignedWord += ' ' + word.alignedWord
+                        restructuredWord.end = word.end
+                        restructuredWordSet.push(restructuredWord)
+                        console.log(restructuredWordSet)
+
+                        // reset the restructured word and wordCount for the next word set
+                        restructuredWord = {
+                            alignedWord: "",
+                            case: "success",
+                            end: null,
+                            start: null
+                        }
+                        wordCount = 0
+                    }
+                })
+                
+                return restructuredWordSet
+            }
+            let currentFrame = 0
+            let currentFrameCount = 0
+            let wordStartFrame = 0
+            /** 
+             * Change event handler for file upload input
+             * @param {Event} event "change" event
+             */
             const handleFiles = (event) => {
-                // do stuff with the files
-                let files = event.target.files
-                let file = files[0]
+                let file = event.target.files[0]
                 if (file) {
                     const reader = new FileReader()
                     reader.readAsText(file, "UTF-8")
-                    reader.onload = (e) => {
-                        // document.getElementById("fileContents").innerHTML = e.target.result
-                        let fileContents = JSON.parse(e.target.result)
-                        //document.getElementById("fileContents").innerHTML = fileContents
-                        let transcript = fileContents.transcript
-                        let words = fileContents.words
-                        let start = words[0].start
-                        const frames = []
 
+                    reader.onload = (e) => {
+                        let fileContents = JSON.parse(e.target.result)
+                        let transcript = fileContents.transcript
+                        let words = prepareWordData(fileContents.words, wordsPerFrame)
+                        console.log(words)
+                        wordStartFrame = words[0].start * fps
+                        /** 
+                         * Calculates the duration of the word in seconds
+                         * @param {string} word transcript word object
+                         * @returns {number} difference in seconds between start and end of word
+                         **/
                         const getWordDuration = (word) => { return word.end - word.start }
-                        const renderWordFrames = (word, duration) => {
-                            let frameCount = Math.round(duration * fps)
-            
+
+                        /** 
+                         * Renders new canvas element for each video frame
+                         * @param {string} word transcript word object
+                         * @param {number} duration difference in seconds between start and end of word
+                         **/
+                        const renderWordFrames = (type, word, duration) => {
+                            // TODO: round the duration to nearest 1/fps
+                            let frameCount = type === "blank" ? duration : Math.ceil(duration * fps)
+                            console.log(type, frameCount)
+                            // For the number of frames that the word is displayed
+                            // Render the word on the canvas context
+                            // Save the resulting image dataURL to the zip folder
                             for (let i = 0; i < frameCount; i++) {
-                                ctx.clearRect(0,0,size, size)
-                                ctx.font = "50pt Arial";
+                                currentFrameCount++
+                                ctx.clearRect(0,0,resolution.width, resolution.height)
+                                ctx.font = "36pt Arial";
                                 ctx.textAlign = "center";
-                                ctx.fillText(word, size/2, size/2)
-                                frames.push(document.getElementById('screen').toDataURL().split(',')[1])
+                                ctx.fillStyle = "red"
+                                ctx.fillText(word, resolution.width/2, resolution.height/2)
+                                let dataUrl = document.getElementById('screen').toDataURL().split(',')[1]
+                                img.file((currentFrameCount - 1) + ".png", dataUrl, {base64: true})
+                                console.log(currentFrameCount + " out of " + songFrameLength)
+                      
                             }
                         }
                         
+                        // Render aligned words to video frame images
                         words.forEach((word) => {
-                            if (word.start < 40 ) { 
+    
+                            console.log('currentFrame = ', currentFrame)
+                            
+                            // How many frames away does this word need to be rendered?
+                            console.log(word.alignedWord, word.start, fps)
+                            let nextWordFrameCount = Math.ceil(word.start * fps - currentFrame)
+                            console.log('nextWordFrameCount = ', nextWordFrameCount)
+
+                            // If the word is starting at a time after the currentFrame
+                            // Generate blank frame images
+                            if (nextWordFrameCount > 0) { 
+                                renderWordFrames('blank', ' ', nextWordFrameCount)
+                                currentFrame += nextWordFrameCount
+                            }
+
+                            // If the current frame is at the start time of this word
+                            // Generate an image with that word
+                            if (word.case === "success") {
                                 let duration = getWordDuration(word)
-                                renderWordFrames(word.alignedWord, duration)
+                                renderWordFrames('word', word.alignedWord, duration)
+                                currentFrame += Math.floor(duration * fps)
                             }
                         });
-                        console.log(frames[0])
-                        socket.emit('render-frame', {
-                                    frame_array: frames
-                        });
+
+                        // Trigger download from the browser
+                        zip.generateAsync({type: 'blob'})
+                            .then((blob) => {
+                                // Add FileSaver.js script at the top to expose
+                                // saveAs global
+                                saveAs(blob, 'frames.zip')
+                            })
+                            .catch((err) => { console.log(err) })
                     }
 
                     reader.onerror = (e) => {
-                        document.getElementById("fileContents").innerHTML = "error reading file"
+                        // Display a message to the user
+                        document.getElementById("message").textContent = "error reading file"
                     }
                 }
-                // file.stream and then JSON parse?
             }
+
             inputElement.addEventListener("change", handleFiles, false)
         </script>
     </body>
