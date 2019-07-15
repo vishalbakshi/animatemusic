@@ -4,14 +4,19 @@
         <link rel="stylesheet" type="text/css" href="/index.css">
     </head>
     <body>
-        <p id="message">hello</p>
+        <p id="message">animatemusic</p>
         <div id="input-container">
-            <!-- add this later for animations
+            <!--
+                
                 <label for="song-upload-input">
                     full song wave file
                     <input type="file" id="song-upload" name="song-upload-input">
                 </label>
             -->
+            <label for="bpm">
+                song beats per minute (bpm)
+                <input type="number" id="bpm-input" name="bpm">
+            </label>
             <label for="fps">
                 video frame rate (fps)
                 <input type="text" id="framerate-input" name="fps">
@@ -75,8 +80,8 @@
                 canvas.style[e.target.name] = e.target.value
                 canvas[e.target.name] = e.target.value * scale
             }
-            resolutionWidthInput.addEventListener("change", handleResolutionInput, false)
-            resolutionHeightInput.addEventListener("change", handleResolutionInput, false)
+            resolutionWidthInput.addEventListener("input", handleResolutionInput, false)
+            resolutionHeightInput.addEventListener("input", handleResolutionInput, false)
 
             // Default Frame Rate
             let fps = 30
@@ -91,7 +96,7 @@
                 fps = e.target.value
                 songFrameLength = fps * songLength
             }
-            frameRateInput.addEventListener("change", handleFrameRateInput, false)
+            frameRateInput.addEventListener("input", handleFrameRateInput, false)
             
             // Get Song data
             let songLengthInput = document.getElementById("song-length")
@@ -101,8 +106,15 @@
                 songLength = e.target.value
                 songFrameLength = fps * songLength
             }
-            songLengthInput.addEventListener("change", handleSongInput, false)
-            
+            songLengthInput.addEventListener("input", handleSongInput, false)
+        
+            let beatsPerMinuteInput = document.getElementById("bpm-input")
+            let bpm = beatsPerMinuteInput.value
+            const handleBeatsPerMinuteInput = (e) => {
+                bpm = e.target.value
+            }
+            beatsPerMinuteInput.addEventListener("input", handleBeatsPerMinuteInput, false)
+
             // Default words per frame
             let wordsPerFrame = 3
 
@@ -110,9 +122,8 @@
             let wordsPerFrameInput = document.getElementById("wordrate-input")
             const handleWordsPerFrameInput = (e) => {
                 wordsPerFrame = e.target.value
-                console.log(wordsPerFrame)
             }
-            wordsPerFrameInput.addEventListener("change", handleWordsPerFrameInput, false)
+            wordsPerFrameInput.addEventListener("input", handleWordsPerFrameInput, false)
 
             // Transcript File Upload
             const inputElement = document.getElementById("transcript-upload")
@@ -137,7 +148,6 @@
                     if (word.case !== "success") { return }
 
                     wordCount++
-                    console.log(wordCount, wordsPerFrame)
                     // start time of the first word should be the start time of the word set
                     if (wordCount === 1) { restructuredWord.start = word.start }
 
@@ -151,7 +161,6 @@
                         restructuredWord.alignedWord += ' ' + word.alignedWord
                         restructuredWord.end = word.end
                         restructuredWordSet.push(restructuredWord)
-                        console.log(restructuredWordSet)
 
                         // reset the restructured word and wordCount for the next word set
                         restructuredWord = {
@@ -183,7 +192,6 @@
                         let fileContents = JSON.parse(e.target.result)
                         let transcript = fileContents.transcript
                         let words = prepareWordData(fileContents.words, wordsPerFrame)
-                        console.log(words)
                         wordStartFrame = words[0].start * fps
                         /** 
                          * Calculates the duration of the word in seconds
@@ -200,7 +208,6 @@
                         const renderWordFrames = (type, word, duration) => {
                             // TODO: round the duration to nearest 1/fps
                             let frameCount = type === "blank" ? duration : Math.ceil(duration * fps)
-                            console.log(type, frameCount)
                             // For the number of frames that the word is displayed
                             // Render the word on the canvas context
                             // Save the resulting image dataURL to the zip folder
@@ -213,20 +220,14 @@
                                 ctx.fillText(word, resolution.width/2, resolution.height/2)
                                 let dataUrl = document.getElementById('screen').toDataURL().split(',')[1]
                                 img.file((currentFrameCount - 1) + ".png", dataUrl, {base64: true})
-                                console.log(currentFrameCount + " out of " + songFrameLength)
                       
                             }
                         }
                         
                         // Render aligned words to video frame images
-                        words.forEach((word) => {
-    
-                            console.log('currentFrame = ', currentFrame)
-                            
+                        words.forEach((word) => {                
                             // How many frames away does this word need to be rendered?
-                            console.log(word.alignedWord, word.start, fps)
                             let nextWordFrameCount = Math.ceil(word.start * fps - currentFrame)
-                            console.log('nextWordFrameCount = ', nextWordFrameCount)
 
                             // If the word is starting at a time after the currentFrame
                             // Generate blank frame images
@@ -251,7 +252,7 @@
                                 // saveAs global
                                 saveAs(blob, 'frames.zip')
                             })
-                            .catch((err) => { console.log(err) })
+                            .catch((err) => { console.error(err) })
                     }
 
                     reader.onerror = (e) => {
@@ -261,7 +262,7 @@
                 }
             }
 
-            inputElement.addEventListener("change", handleFiles, false)
+            inputElement.addEventListener("input", handleFiles, false)
         </script>
     </body>
 </html>
