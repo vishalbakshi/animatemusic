@@ -5,9 +5,17 @@
     </head>
     <body>
         <p id="message">animatemusic</p>
+
+            
+            <svg width="600" height="450">
+                    <!-- <polygon id="polygon" points="143 31 21 196 286 223" fill="#ED6E46" /> -->
+            </svg>
+
+        <canvas id="screen">
+            
+        </canvas>
         <div id="input-container">
             <!--
-                
                 <label for="song-upload-input">
                     full song wave file
                     <input type="file" id="song-upload" name="song-upload-input">
@@ -27,7 +35,7 @@
             </label>
             <label for="song-length-input">
                 full song length (seconds)
-                <input type="number" id="song-length" name="song-length-input">
+                <input type="number" id="song-length" name="duration">
             </label>
             <label for="width">
                 video width (px)
@@ -49,11 +57,12 @@
                 
             -->
         </div>
-        <canvas id="screen">
-        </canvas>
+        
         <script type="text/javascript" src="/jszip.min.js"></script>
         <script type="text/javascript" src="/FileSaver.js"></script>
+        <script type="text/javascript" src="/anime.min.js"></script>
         <script>
+            let wordsForFrames = []
             const zip = new JSZip()
             let canvas = document.getElementById('screen')
             let ctx = canvas.getContext('2d')
@@ -62,7 +71,7 @@
             const img = zip.folder("images")
 
             // Default Resolution 
-            let resolution = { height: 160, width: 320}
+            let resolution = { height: 500, width: 500 }
 
             // Canvas sizing
             let scale = window.devicePixelRatio || 1
@@ -127,6 +136,7 @@
 
             // Transcript File Upload
             const inputElement = document.getElementById("transcript-upload")
+
 
             /** 
              * Restructure JSON file based on words per frame
@@ -213,6 +223,8 @@
                             // Save the resulting image dataURL to the zip folder
                             for (let i = 0; i < frameCount; i++) {
                                 currentFrameCount++
+                                //draw(word)
+                                /*
                                 ctx.clearRect(0,0,resolution.width, resolution.height)
                                 ctx.font = "36pt Arial";
                                 ctx.textAlign = "center";
@@ -220,6 +232,7 @@
                                 ctx.fillText(word, resolution.width/2, resolution.height/2)
                                 let dataUrl = document.getElementById('screen').toDataURL().split(',')[1]
                                 img.file((currentFrameCount - 1) + ".png", dataUrl, {base64: true})
+                                */
                       
                             }
                         }
@@ -232,7 +245,8 @@
                             // If the word is starting at a time after the currentFrame
                             // Generate blank frame images
                             if (nextWordFrameCount > 0) { 
-                                renderWordFrames('blank', ' ', nextWordFrameCount)
+                                //renderWordFrames('blank', ' ', nextWordFrameCount)
+                                for (let i = 0; i < nextWordFrameCount; i++) { wordsForFrames.push(' ') }
                                 currentFrame += nextWordFrameCount
                             }
 
@@ -240,19 +254,71 @@
                             // Generate an image with that word
                             if (word.case === "success") {
                                 let duration = getWordDuration(word)
-                                renderWordFrames('word', word.alignedWord, duration)
+                                //renderWordFrames('word', word.alignedWord, duration)
+                                for (let i = 0; i < Math.ceil(duration * fps); i++) { wordsForFrames.push(word.alignedWord) }
                                 currentFrame += Math.floor(duration * fps)
                             }
                         });
 
                         // Trigger download from the browser
-                        zip.generateAsync({type: 'blob'})
+    
+
+                            // dig in to this: https://stackoverflow.com/questions/19764018/controlling-fps-with-requestanimationframe
+                            // and this: http://codetheory.in/controlling-the-frame-rate-with-requestanimationframe/
+                            var now
+                            var then = Date.now()
+                            var interval = 1000/fps
+                            var delta
+                            var currentIdx = 0
+                            //console.log(wordsForFrames)
+                            function draw() {
+                                // why does this happen first?
+                                if (currentIdx < wordsForFrames.length) { requestAnimationFrame(draw) }
+                                if (currentIdx >= wordsForFrames.length) { 
+                                    zip.generateAsync({type: 'blob'})
                             .then((blob) => {
                                 // Add FileSaver.js script at the top to expose
                                 // saveAs global
                                 saveAs(blob, 'frames.zip')
                             })
                             .catch((err) => { console.error(err) })
+                                }
+                            
+                                //console.log(word)
+                                now = Date.now();
+                                delta = now - then;
+                                console.log('now: ', now, 'then: ', then, 'delta: ', delta)
+                                
+                                if (delta > interval) {
+                                    // update time stuffs
+                                    
+                                    // Just `then = now` is not enough.
+                                    // Lets say we set fps at 10 which means
+                                    // each frame must take 100ms
+                                    // Now frame executes in 16ms (60fps) so
+                                    // the loop iterates 7 times (16*7 = 112ms) until
+                                    // delta > interval === true
+                                    // Eventually this lowers down the FPS as
+                                    // 112*10 = 1120ms (NOT 1000ms).
+                                    // So we have to get rid of that extra 12ms
+                                    // by subtracting delta (112) % interval (100).
+                                    // Hope that makes sense.
+                                    
+                                    then = now - (delta % interval);
+                                    //console.log('new then: ', then)
+                                    
+                                    // ... Code for Drawing the Frame ...
+                                    ctx.clearRect(0,0,resolution.width, resolution.height)
+                                    ctx.font = "36pt Arial";
+                                    ctx.textAlign = "center";
+                                    ctx.fillStyle = "red"
+                                    ctx.fillText(wordsForFrames[currentIdx], resolution.width/2, resolution.height/2)
+                                    let dataUrl = document.getElementById('screen').toDataURL().split(',')[1]
+                                    img.file(currentIdx + ".png", dataUrl, {base64: true})
+                                    currentIdx++
+                                }
+                            }
+                            draw()
                     }
 
                     reader.onerror = (e) => {
@@ -263,6 +329,31 @@
             }
 
             inputElement.addEventListener("input", handleFiles, false)
+        
+            // *** ANIME.JS *** //
+            /*
+            var animation = anime({
+                targets: 'polygon',
+                translateX: 270,
+                direction: 'alternate',
+                loop: true,
+                easing: 'easeInOutQuad',
+                autoplay: false
+            });
+
+            function loop(t) {
+                //console.log(t)
+                animation.tick(t);
+                customRAF = requestAnimationFrame(loop);
+            }
+
+            requestAnimationFrame(loop);
+            */
+
+            
+            
+            
+            //draw();
         </script>
     </body>
 </html>

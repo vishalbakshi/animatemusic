@@ -1,0 +1,307 @@
+<html>
+    <head>
+        <title>animate music</title>
+        <link rel="stylesheet" type="text/css" href="/index.css">
+        <script type="text/javascript" src="/jszip.min.js"></script>
+        <script type="text/javascript" src="/FileSaver.js"></script>
+        <script type="text/javascript" src="/anime.min.js"></script>
+    </head>
+    <body>
+        <h1>animate-music</h1>
+        <h2>convert forced-alignment data and song audio to a set of animated video .png frames</h2>
+        <canvas id="screen"></canvas>
+        <div id="input-container">
+            <!--
+                <label for="song-upload-input">
+                    full song wave file
+                    <input type="file" id="song-upload" name="song-upload-input">
+                </label>
+            -->
+            <label for="bpm">
+                song beats per minute (bpm)
+                <input type="number" id="bpm-input" name="bpm">
+            </label>
+            <label for="fps">
+                video frame rate (fps)
+                <input type="number" id="framerate-input" name="fps">
+            </label>
+            <label for="wpf">
+                words per frame
+                <input type="number" id="wordrate-input" name="wpf">
+            </label>
+            <label for="song-length-input">
+                audio duration (seconds)
+                <input type="number" id="duration-input" name="duration">
+            </label>
+            <label for="width">
+                video width (px)
+                <input type="number" id="width-input" name="width">
+            </label>
+            <label for="height">
+                video height (px)
+                <input type="number" id="height-input" name="height">
+            </label>
+            <label for="transcript-upload-input">
+                lyrics (.json, <a href="#" id="json-example" >example)</a>
+                <input type="file" id="transcript-input" name="transcript" multiple>
+        </label>
+            <!-- this should eventually trigger the whole process
+                <label for="submit">
+                    generate lyric frames
+                    <button name="submit" id="submit">generate</button>
+                </label>
+                
+            -->
+
+        </div>
+    </body>
+    <script>
+        const zip = new JSZip()
+        let canvas = document.getElementById('screen')
+        let ctx = canvas.getContext('2d')
+
+        // Prepare a folder for the frame PNGs
+        const img = zip.folder("images")
+
+        // Default Resolution 
+        let resolution = { height: 500, width: 500 }
+
+        // Canvas sizing
+        let scale = window.devicePixelRatio || 1
+        canvas.style.width = resolution.width + "px"
+        canvas.style.height = resolution.height + "px"
+        canvas.width = resolution.width * scale
+        canvas.height = resolution.height * scale
+        ctx.scale(scale, scale)
+
+        // Initial State of the App
+        let state = {
+            height: 500,
+            width: 500,
+            duration: 60,
+            fps: 30,
+            frames: 1800,
+            bpm: null,
+            wpf: 3
+        }
+
+        // Get Input Elements
+        const frameRateInput = document.getElementById('framerate-input')
+        const durationInput = document.getElementById("duration-input")
+        const beatsPerMinuteInput = document.getElementById("bpm-input")
+        const wordsPerFrameInput = document.getElementById("wordrate-input")
+        const transcriptInput = document.getElementById("transcript-input")
+        const videoWidthInput = document.getElementById("width-input")
+        const videoHeightInput = document.getElementById("height-input")
+
+        // Define `input` Event Handler
+        const handleInputEvent = (e) => {
+            state[e.target.name] = e.target.value
+            
+            // update state.frames if fps or duration inputs change
+            if (e.target.name == "fps" || e.target.name == "duration") {
+                state.frames = state.fps * state.duration
+            }
+
+            // update canvas size if height or width inputs change
+            if (e.target.name == "height" || e.target.name == "width") {
+                canvas.style[e.target.name] = e.target.value + "px"
+                canvas[e.target.name] = e.target.value * scale
+                
+            }
+        }
+
+        // Attach Event Listener to Inputs
+        frameRateInput.addEventListener("input", handleInputEvent, false)
+        durationInput.addEventListener("input", handleInputEvent, false)
+        beatsPerMinuteInput.addEventListener("input", handleInputEvent, false)
+        wordsPerFrameInput.addEventListener("input", handleInputEvent, false)
+        videoWidthInput.addEventListener("input", handleInputEvent, false)
+        videoHeightInput.addEventListener("input", handleInputEvent, false)
+
+        // *** PARSE THE TRANSCRIPT *** //
+
+        /**
+         * Concatenate multiple words into one string
+         * @param {Array} word Objects
+         * @param {string} delimiter
+         * return {string}  single string of words
+         */
+        const concatenateWords = (words, delimiter) => {
+            return words.map((word) => word.alignedWord).join(delimiter)
+        }
+
+        /**
+         * Checks success case of words in a word set
+         * @param {Array} word Objects
+         * return {string} case status
+         */
+        const checkWordCase = (words) => {
+            return words.every((word) =>  word.case === "success" ) ? "success" : "not-in-audio"
+        }
+         
+        /**
+         * Create new word object
+         * Concatenate multiple words into a single string
+         * @param {Array} word objects
+         * return {Object} single word object
+         */
+        const restructureWord = (words) => {
+            return {
+                alignedWord: concatenateWords(words, " "),
+                case: checkWordCase(words),
+                end: words[words.length - 1].end,
+                end_ms: words[words.length - 1].end * 1000,
+                start: words[0].start,
+                start_ms: words[0].start * 1000
+            }
+        }
+
+        /**
+         * Restructure JSON transcript file 
+         * Group togther each set of wpf (number) words
+         * @param {Array} word Objects from JSON "words" property
+         * @param {number} wpf
+         */
+        const prepareWordSets = (words, wpf) => {
+            let wordSet = []
+            let restructuredWordSet = []
+
+            for (let i = 0; i < words.length; i++) {
+                if (wordSet.length > wpf - 1) { 
+                    restructuredWordSet.push(restructureWord(wordSet))
+                    wordSet = [] 
+                }
+
+                if (wordSet.length <= wpf) { wordSet.push(words[i]) }
+            }
+
+            return restructuredWordSet
+        }
+
+        /**
+         * Draw text onto canvas element
+         * @param {string} textAlign property
+         * @param {string} font size and name "50pt Arial"
+         * @param {string} fillStyle 
+         * @param {string} text to be drawn on canvas element
+         * return {string} image data URL
+         */
+        const drawCanvasFrame = (textAlign="center", font="36pt Arial", fillStyle="red", text="") => {
+            ctx.clearRect(0,0,state.width, state.height)
+            ctx.font = font
+            ctx.textAlign = textAlign
+            ctx.fillStyle = fillStyle
+            ctx.fillText(text, state.width/2, state.height/2)
+            
+            return document.getElementById('screen').toDataURL().split(',')[1]
+        }
+
+        
+        /**
+         * Generates png files from canvas element
+         * @param {Array} word objects
+         */
+        async function generateFrameImages(words) {
+            return new Promise(resolve => {
+                let now
+                let start = Date.now()
+                let then = Date.now()
+                let interval = 1000/state.fps
+                let delta
+                let dataUrl
+                let wordToBeDrawn = ""
+                let currentIdx = 0
+                let requestID
+                let currentTime = 0
+
+                /**
+                * Callback for requestAnimation
+                * 
+                */
+                function draw() {
+                    if (currentIdx == 2000 || currentTime > 60000) {
+                        cancelAnimationFrame(requestId)
+                        return resolve("done")
+                    }
+  
+                    requestId = requestAnimationFrame(draw)
+                    now = Date.now()
+                    delta = now - then
+                    currentTime = now - start
+
+                    // Get word that is between (start - now) and (start  - now + interval)
+                    // If it's undefined, set to empty string for blank canvas frame
+                    wordToBeDrawn = words.filter((word) => (word.end_ms > currentTime) && (word.start_ms <= currentTime))
+                    wordToBeDrawn = wordToBeDrawn[0] ? wordToBeDrawn[0].alignedWord : ""
+
+                    if (delta > interval) {
+                        // in order to keep `now - then` at `interval` for each frame
+                        then = now - (delta % interval)
+                        let canvasDataUrl = drawCanvasFrame("center", "36pt Arial", "dodgerblue", wordToBeDrawn)
+                        img.file(currentIdx + ".png", canvasDataUrl, {base64: true})
+                        currentIdx++
+
+                    }
+                }
+                draw()
+            })
+
+        }
+
+        /**
+         * Downloads zipped image files from browser
+         */
+        const downloadZipFolder = () => {
+            zip.generateAsync({type: 'blob'})
+                .then((blob) => {
+                    // Add FileSaver.js script at the top to expose
+                    // saveAs global
+                    saveAs(blob, 'frames.zip')
+                })
+                .catch((err) => { console.error(err) })
+        }
+
+        /**
+         * Event handler for file reader 'load' event
+         * @param {Event} 
+         */
+        async function loadTranscriptFile(e) {
+            let fileContents = JSON.parse(e.target.result)
+            let transcript = fileContents.transcript
+            let words = prepareWordSets(fileContents.words, state.wpf)
+            let result = await generateFrameImages(words)
+            if (result === "done") { 
+                downloadZipFolder()
+            }
+        }
+
+        /**
+         * Event handler for file reader 'error' event
+         * @param {Event}
+         */
+        const errorTranscriptFile = (e) => {
+            document.getElementById("message").textContent = "error reading transcript"
+            console.error("erorr reading transcript")
+        }
+
+        /**
+         * Event handler for transcript file input
+         * @param {Event} input event
+         */
+        const handleTranscriptFile = (e) => {
+            const file = event.target.files[0]
+            if (file) {
+                const reader = new FileReader()
+                reader.readAsText(file, 'UTF-8')
+                reader.onload = loadTranscriptFile
+                reader.onerror = errorTranscriptFile
+            }
+        }
+
+        // Attach file input transcript handler
+        transcriptInput.addEventListener("input", handleTranscriptFile, false)
+
+
+    </script>
+</html>
