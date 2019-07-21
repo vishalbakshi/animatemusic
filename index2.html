@@ -9,14 +9,143 @@
     <body>
         <h1>animate-music</h1>
         <h2>convert forced-alignment data and song audio to a set of animated video .png frames</h2>
+        
+        <canvas id="clock" width="720" height="720" style="width: 720px; height: 720px;"></canvas>
         <canvas id="screen"></canvas>
+        <script id="vertex-shader" type="glsl">
+            attribute vec2 coord;
+            void main(void) {
+                gl_Position = vec4(coord, 0.0, 1.0);
+            }
+        </script>
+        <script id="fragment-shader" type="glsl">
+            uniform mediump float factor;
+            uniform mediump float millisecs;
+            uniform mediump float red;
+            uniform mediump float green;
+            uniform mediump float blue;
+            uniform mediump float alpha;
+
+            void main(void) {
+                mediump float redOsc = 0.8 * ((sin(millisecs/factor) + 1.0) / 2.0) + 0.2;
+                mediump float greenOsc = 0.8 * ((sin(millisecs/factor) + 1.0) / 2.0) + 0.2;
+                mediump float blueOsc = ((sin(millisecs/factor) + 1.0) / 2.0);
+                gl_FragColor = vec4(red * redOsc, green * greenOsc, blue * blueOsc, 0.2);
+            }
+        </script>
+
+        <script>
+            // https://jameshfisher.com/2017/10/05/webgl-fragment-shader-animation/
+            const clockEl = document.getElementById("clock");
+            const gl = clockEl.getContext("webgl")
+            gl.viewport(0,0,clockEl.width, clockEl.height);
+
+            const vertShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertShader, document.getElementById('vertex-shader').innerText);
+            gl.compileShader(vertShader);
+            
+            const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragShader, document.getElementById('fragment-shader').innerText);
+            gl.compileShader(fragShader);
+            if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
+                console.error("error: ", gl.getShaderInfoLog(fragShader));
+            }
+
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vertShader);
+            gl.attachShader(prog, fragShader);
+            gl.linkProgram(prog);
+            gl.useProgram(prog);
+            
+            const vertBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.1,.1,   -.1,-.1,  .1,-.1,   .1,.1, -.1,.1,   -.1,-.1,  -.3,-.1,   -.3,.1]), gl.STATIC_DRAW);
+            // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.1,.1,   -.1,-.1,  -.3,-.1,   -.3,.1]), gl.STATIC_DRAW);
+
+            const coordPtr = gl.getAttribLocation(prog, 'coord');
+            // console.log(coordPtr) consoles 0
+            gl.vertexAttribPointer(coordPtr, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(coordPtr);
+            gl.clearColor(1,0,0,1);
+            
+            const millisecsPtr = gl.getUniformLocation(prog, 'millisecs');
+            const factorPtr = gl.getUniformLocation(prog, 'factor');
+            const coefPtr = gl.getUniformLocation(prog, 'coef');
+            const redPtr = gl.getUniformLocation(prog, 'red');
+            const greenPtr = gl.getUniformLocation(prog, 'green');
+            const bluePtr = gl.getUniformLocation(prog, 'blue');
+            const alphaPtr = gl.getUniformLocation(prog, 'alpha');
+
+            const start = new Date().getTime();
+            const columns = 10;
+            const rows = 10;
+            const PI =  3.14159265359;
+            let coef = 1.0;
+            let bpm = 50.0;
+            let period = 60000.0 / bpm;
+            let factor = period / ( 2.0 * PI );
+            gl.uniform1f(factorPtr, factor);
+            gl.uniform1f(redPtr, 1.0)
+            gl.uniform1f(greenPtr, 0.325)
+            gl.uniform1f(bluePtr, 0.286)
+            gl.uniform1f(alphaPtr, 1.0)
+
+            const drawRectangle = () => {
+                let x0 = -1.0;
+                let y0 = 1.0;
+                let inc = 0.05
+                gl.uniform1f(redPtr, 0.294);
+                gl.uniform1f(greenPtr, 0);
+                gl.uniform1f(bluePtr, 0.51);
+                
+
+                for (let j = 0; j < 40; j++){
+                    for (let i = 0; i < 40; i++) {
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            x0 + i * inc, y0 - j * inc,
+                            x0 + i * inc, y0 - inc - j * inc,
+                            x0 + inc + i * inc, y0 - inc - j * inc, 
+                            x0 + inc + i * inc, y0 - j * inc
+                        ]), gl.STATIC_DRAW)
+                        //factor = -1.0 * factor;
+                        
+                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                    }
+                    factorCoef = Math.random() < 0.5 ? -1.0 : 1.0
+                    factor = factorCoef * factor;
+                    gl.uniform1f(factorPtr, factor);
+                }
+                
+
+        
+
+                /*
+                for (let i = 0; i < 10; i++) {
+                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                        x0 + 0.1 + i * 0.2, y0,
+                        x0 + 0.1 + i * 0.2, y0 - 0.1,
+                        x0 + 0.2 + i * 0.2, y0 - 0.1, 
+                        x0 + 0.2 + i * 0.2, y0
+                    ]), gl.STATIC_DRAW)
+                    gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                }
+                */
+                
+            }
+            window.setInterval(function() {
+                gl.uniform1f(millisecsPtr, (new Date().getTime()) - start);
+                drawRectangle();
+
+            }, 50);
+
+        </script>
+        <audio id="audio-file" controls type="audio/wave"></audio>
         <div id="input-container">
-            <!--
-                <label for="song-upload-input">
-                    full song wave file
-                    <input type="file" id="song-upload" name="song-upload-input">
-                </label>
-            -->
+
+            <label for="song-upload-input">
+                full song wave file
+                <input type="file" id="song-input" name="song">
+            </label>
             <label for="bpm">
                 song beats per minute (bpm)
                 <input type="number" id="bpm-input" name="bpm">
@@ -93,6 +222,7 @@
         const transcriptInput = document.getElementById("transcript-input")
         const videoWidthInput = document.getElementById("width-input")
         const videoHeightInput = document.getElementById("height-input")
+        const songInput = document.getElementById("song-input")
 
         // Define `input` Event Handler
         const handleInputEvent = (e) => {
@@ -301,6 +431,73 @@
 
         // Attach file input transcript handler
         transcriptInput.addEventListener("input", handleTranscriptFile, false)
+
+        // *** AUDIO STUFF *** //
+
+        /**
+         * Event handler for song file input
+         * @param {Event} input event
+         */
+         const handleAudioFile = (e) => {
+             const file = event.target.files[0]
+             if (file) {
+                 const audioUrl = URL.createObjectURL(file)
+                 let audioElement = document.getElementById("audio-file")
+                 audioElement.src = audioUrl
+                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+                 const audioSrc = audioCtx.createMediaElementSource(audioElement)
+                 const analyser = audioCtx.createAnalyser()
+
+                 audioSrc.connect(analyser)
+                 audioSrc.connect(audioCtx.destination)
+                 analyser.fftSize = 2048
+                 const bufferLength = analyser.frequencyBinCount
+                 const dataArray = new Uint8Array(bufferLength)
+                 analyser.getByteTimeDomainData(dataArray)
+                
+                 
+
+                 const draw = () => {
+                     drawVisual = requestAnimationFrame(draw)
+                     analyser.getByteTimeDomainData(dataArray)
+
+                     ctx.fillStyle = 'rgb(200,200,200)'
+                     ctx.fillRect(0,0,canvas.width, canvas.height)
+                     ctx.lineWidth = 2
+                     ctx.strokeStyle = 'rgb(0,0,0)'
+
+                     ctx.beginPath()
+
+                     var sliceWidth = canvas.width * 1.0 / bufferLength
+                     var x = 0
+
+                    
+                     for (let i = 0; i < bufferLength; i++) {
+                         let v = dataArray[i] / 128.0
+                         let y = v * canvas.height / 2
+
+                         if (i === 0) {
+                             ctx.moveTo(x, y)
+                         } else {
+                             ctx.lineTo(x, y)
+                         }
+
+                         x += sliceWidth
+                        
+                     }
+                     
+                     ctx.lineTo(canvas.width, canvas.height/2)
+                     ctx.stroke()
+   
+                     
+                 }
+                 draw()
+
+                 
+             }
+         }
+         songInput.addEventListener("change", handleAudioFile, false)
+
 
 
     </script>
