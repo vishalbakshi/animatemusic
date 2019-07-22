@@ -9,8 +9,12 @@
     <body>
         <h1>animate-music</h1>
         <h2>convert forced-alignment data and song audio to a set of animated video .png frames</h2>
-        
-        <canvas id="clock" width="720" height="720" style="width: 720px; height: 720px;"></canvas>
+        <!-- 
+
+        <img id="updated-image" />
+        <canvas id="image-test"></canvas>
+        -->
+        <canvas id="animation" width="1280" height="720" style="width: 1280px; height: 720px;"></canvas>
         <canvas id="screen"></canvas>
         <script id="vertex-shader" type="glsl">
             attribute vec2 coord;
@@ -30,118 +34,15 @@
                 mediump float redOsc = 0.8 * ((sin(millisecs/factor) + 1.0) / 2.0) + 0.2;
                 mediump float greenOsc = 0.8 * ((sin(millisecs/factor) + 1.0) / 2.0) + 0.2;
                 mediump float blueOsc = ((sin(millisecs/factor) + 1.0) / 2.0);
-                gl_FragColor = vec4(red * redOsc, green * greenOsc, blue * blueOsc, 0.2);
+                gl_FragColor = vec4(red * redOsc, green * greenOsc, blue * blueOsc, 1.0);
             }
         </script>
 
         <script>
-            // https://jameshfisher.com/2017/10/05/webgl-fragment-shader-animation/
-            const clockEl = document.getElementById("clock");
-            const gl = clockEl.getContext("webgl")
-            gl.viewport(0,0,clockEl.width, clockEl.height);
-
-            const vertShader = gl.createShader(gl.VERTEX_SHADER);
-            gl.shaderSource(vertShader, document.getElementById('vertex-shader').innerText);
-            gl.compileShader(vertShader);
-            
-            const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
-            gl.shaderSource(fragShader, document.getElementById('fragment-shader').innerText);
-            gl.compileShader(fragShader);
-            if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
-                console.error("error: ", gl.getShaderInfoLog(fragShader));
-            }
-
-            const prog = gl.createProgram();
-            gl.attachShader(prog, vertShader);
-            gl.attachShader(prog, fragShader);
-            gl.linkProgram(prog);
-            gl.useProgram(prog);
-            
-            const vertBuf = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.1,.1,   -.1,-.1,  .1,-.1,   .1,.1, -.1,.1,   -.1,-.1,  -.3,-.1,   -.3,.1]), gl.STATIC_DRAW);
-            // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-.1,.1,   -.1,-.1,  -.3,-.1,   -.3,.1]), gl.STATIC_DRAW);
-
-            const coordPtr = gl.getAttribLocation(prog, 'coord');
-            // console.log(coordPtr) consoles 0
-            gl.vertexAttribPointer(coordPtr, 2, gl.FLOAT, false, 0, 0);
-            gl.enableVertexAttribArray(coordPtr);
-            gl.clearColor(1,0,0,1);
-            
-            const millisecsPtr = gl.getUniformLocation(prog, 'millisecs');
-            const factorPtr = gl.getUniformLocation(prog, 'factor');
-            const coefPtr = gl.getUniformLocation(prog, 'coef');
-            const redPtr = gl.getUniformLocation(prog, 'red');
-            const greenPtr = gl.getUniformLocation(prog, 'green');
-            const bluePtr = gl.getUniformLocation(prog, 'blue');
-            const alphaPtr = gl.getUniformLocation(prog, 'alpha');
-
-            const start = new Date().getTime();
-            const columns = 10;
-            const rows = 10;
-            const PI =  3.14159265359;
-            let coef = 1.0;
-            let bpm = 50.0;
-            let period = 60000.0 / bpm;
-            let factor = period / ( 2.0 * PI );
-            gl.uniform1f(factorPtr, factor);
-            gl.uniform1f(redPtr, 1.0)
-            gl.uniform1f(greenPtr, 0.325)
-            gl.uniform1f(bluePtr, 0.286)
-            gl.uniform1f(alphaPtr, 1.0)
-
-            const drawRectangle = () => {
-                let x0 = -1.0;
-                let y0 = 1.0;
-                let inc = 0.05
-                gl.uniform1f(redPtr, 0.294);
-                gl.uniform1f(greenPtr, 0);
-                gl.uniform1f(bluePtr, 0.51);
-                
-
-                for (let j = 0; j < 40; j++){
-                    for (let i = 0; i < 40; i++) {
-                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-                            x0 + i * inc, y0 - j * inc,
-                            x0 + i * inc, y0 - inc - j * inc,
-                            x0 + inc + i * inc, y0 - inc - j * inc, 
-                            x0 + inc + i * inc, y0 - j * inc
-                        ]), gl.STATIC_DRAW)
-                        //factor = -1.0 * factor;
-                        
-                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-                    }
-                    factorCoef = Math.random() < 0.5 ? -1.0 : 1.0
-                    factor = factorCoef * factor;
-                    gl.uniform1f(factorPtr, factor);
-                }
-                
-
-        
-
-                /*
-                for (let i = 0; i < 10; i++) {
-                    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-                        x0 + 0.1 + i * 0.2, y0,
-                        x0 + 0.1 + i * 0.2, y0 - 0.1,
-                        x0 + 0.2 + i * 0.2, y0 - 0.1, 
-                        x0 + 0.2 + i * 0.2, y0
-                    ]), gl.STATIC_DRAW)
-                    gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-                }
-                */
-                
-            }
-            window.setInterval(function() {
-                gl.uniform1f(millisecsPtr, (new Date().getTime()) - start);
-                drawRectangle();
-
-            }, 50);
-
         </script>
         <audio id="audio-file" controls type="audio/wave"></audio>
         <div id="input-container">
-
+            <button id="generate-animation" type="submit">Generate Animation</button>
             <label for="song-upload-input">
                 full song wave file
                 <input type="file" id="song-input" name="song">
@@ -184,7 +85,198 @@
 
         </div>
     </body>
+    <!--
     <script>
+        window.onload = function() {
+            var c = document.createElement("canvas");
+            var ctx = c.getContext("2d");
+            var img = new Image();
+            img.src = "/veemo.jpg";
+            //================================================================
+            // this event will only get called after you have returned from this function
+            img.onload = function() {
+                console.log('LOADED');
+                let w = img.width/10;
+                let h = img.height/10;
+                ctx.drawImage(img, 0, 0, w, h);
+                var imgData = ctx.getImageData(0,0,w,h);
+                for (let i = 0; i < imgData.data.length; i+= 4) {
+                    imgData.data[i] = imgData.data[i] * 0.5;
+                    imgData.data[i + 1] = imgData.data[i + 1] * 0.8;
+                    imgData.data[i + 2] = imgData.data[i + 2] * 0.2;
+                    imgData.data[i + 3] = imgData.data[i + 3];
+                    console.log(i)
+                }
+                console.log('done!');
+                ctx.putImageData(imgData,0,0);
+                document.getElementById("updated-image").style.width = w;
+                document.getElementById("updated-image").style.height = h;
+                document.getElementById("updated-image").width = w;
+                document.getElementById("updated-image").height = h;
+                document.getElementById("updated-image").src = c.toDataURL("image/jpeg")
+            }
+        }
+
+    </script>
+    -->
+    <script>
+            // Started out as: https://jameshfisher.com/2017/10/05/webgl-fragment-shader-animation/
+            const animationCanvas = document.getElementById("animation");
+            const gl = animationCanvas.getContext("webgl")
+            gl.viewport(
+                0.5 * (animationCanvas.width - animationCanvas.height), 0,
+                animationCanvas.height, animationCanvas.height
+            );
+
+            const vertShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertShader, document.getElementById('vertex-shader').innerText);
+            gl.compileShader(vertShader);
+            
+            const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragShader, document.getElementById('fragment-shader').innerText);
+            gl.compileShader(fragShader);
+            if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
+                console.error("error: ", gl.getShaderInfoLog(fragShader));
+            }
+
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vertShader);
+            gl.attachShader(prog, fragShader);
+            gl.linkProgram(prog);
+            gl.useProgram(prog);
+            
+            const vertBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+                   
+
+            const coordPtr = gl.getAttribLocation(prog, 'coord');
+            gl.vertexAttribPointer(coordPtr, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(coordPtr);
+            gl.clearColor(1,0,0,1);
+            
+            const millisecsPtr = gl.getUniformLocation(prog, 'millisecs');
+            const factorPtr = gl.getUniformLocation(prog, 'factor');
+            const coefPtr = gl.getUniformLocation(prog, 'coef');
+            const redPtr = gl.getUniformLocation(prog, 'red');
+            const greenPtr = gl.getUniformLocation(prog, 'green');
+            const bluePtr = gl.getUniformLocation(prog, 'blue');
+            const alphaPtr = gl.getUniformLocation(prog, 'alpha');
+
+            const start = new Date().getTime();
+            const columns = 10;
+            const rows = 10;
+            const PI =  3.14159265359;
+            let coef = 1.0;
+            let bpm = 50.0;
+            let period = 60000.0 / bpm;
+            let factor = period / ( 2.0 * PI );
+            gl.uniform1f(factorPtr, factor);
+            gl.uniform1f(redPtr, 1.0)
+            gl.uniform1f(greenPtr, 0.325)
+            gl.uniform1f(bluePtr, 0.286)
+            gl.uniform1f(alphaPtr, 1.0)
+
+            const drawRectangle_2 = () => {
+                let x0 = -1.0;
+                let y0 = 1.0;
+                let inc = 0.02
+                gl.uniform1f(redPtr, 0.1);
+                gl.uniform1f(greenPtr, 0);
+                gl.uniform1f(bluePtr, 0.51);
+
+                for (let j = 0; j < 2.0 / inc; j++){
+                    for (let i = 0; i < 2.0 / inc; i++) {
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            x0 + i * inc, y0 - j * inc,
+                            x0 + i * inc, y0 - inc - j * inc,
+                            x0 + inc + i * inc, y0 - inc - j * inc, 
+                            x0 + inc + i * inc, y0 - j * inc
+                        ]), gl.STATIC_DRAW)
+                        factor = -1.0 * factor;
+                        
+                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                    }
+                    factorCoef = Math.random() < 0.5 ? -1.0 : 1.0
+                    factor = factorCoef * factor;
+                    gl.uniform1f(factorPtr, factor);
+                }
+            }
+
+            const drawRectangle = () => {
+                let x0 = -1.0;
+                let y0 = 1.0;
+                let inc = 0.02;
+                let colorCoef = 1.0;
+                gl.uniform1f(redPtr, 0.1);
+                gl.uniform1f(greenPtr, 0);
+                gl.uniform1f(bluePtr, 0.51);
+                
+
+                for (let j = 0; j < 2.0 / inc; j++){
+                    for (let i = 0; i < 2.0 / inc; i++) {
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            x0 + i * inc, y0 - j * inc,
+                            x0 + i * inc, y0 - inc - j * inc,
+                            x0 + inc + i * inc, y0 - inc - j * inc, 
+                            x0 + inc + i * inc, y0 - j * inc
+                        ]), gl.STATIC_DRAW)
+
+                        colorCoef = Math.random();
+                        gl.uniform1f(redPtr, 0.1 * colorCoef);
+                        gl.uniform1f(greenPtr, 0 * colorCoef);
+                        gl.uniform1f(bluePtr, 0.51 * colorCoef);
+                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                    }
+                    //factorCoef = Math.random() < 0.5 ? -1.0 : 1.0
+                    //factor = factorCoef * factor;
+                    //gl.uniform1f(factorPtr, factor);
+                } 
+            }
+
+
+            const drawRectangle_3 = () => {
+                let x0 = -1.0;
+                let y0 = 1.0;
+                let inc = 0.02;
+                let colorCoef = 1.0;
+                gl.uniform1f(redPtr, 0.3);
+                gl.uniform1f(greenPtr, 0.5);
+                gl.uniform1f(bluePtr, 0.2);
+                
+
+                for (let j = 0; j < 2.0 / inc; j++){
+                    for (let i = 0; i < 2.0 / inc; i++) {
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            x0 + i * inc, y0 - j * inc,
+                            x0 + i * inc, y0 - inc - j * inc,
+                            x0 + inc + i * inc, y0 - inc - j * inc, 
+                            x0 + inc + i * inc, y0 - j * inc
+                        ]), gl.STATIC_DRAW)
+
+                        colorCoef = Math.random();
+                        gl.uniform1f(redPtr, 0.9 * colorCoef);
+                        gl.uniform1f(greenPtr, 0.8 * colorCoef);
+                        gl.uniform1f(bluePtr, 0.1 * colorCoef);
+                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                    }
+                    //factorCoef = Math.random() < 0.5 ? -1.0 : 1.0
+                    //factor = factorCoef * factor;
+                    //gl.uniform1f(factorPtr, factor);
+                } 
+            }
+            
+            
+            window.setInterval(function() {
+                gl.uniform1f(millisecsPtr, (new Date().getTime()) - start);
+                drawRectangle_3();
+
+            }, 50);
+            
+            
+
+
+
+        /// 
         const zip = new JSZip()
         let canvas = document.getElementById('screen')
         let ctx = canvas.getContext('2d')
@@ -327,9 +419,90 @@
             return document.getElementById('screen').toDataURL().split(',')[1]
         }
 
-        
+        /** 
+         * Generates png files form canvas element for animation
+         */
+
+        async function generateAnimationImages() {
+            return new Promise(resolve => {
+                let now;
+                let start = Date.now();
+                let then = Date.now();
+                let interval = 1000/state.fps;
+                let delta;
+                let currentIdx = 0;
+                let currentTime = 0;
+                let requestId;
+
+                function draw() {
+                    if (currentTime > 270000) {
+                        cancelAnimationFrame(requestId);
+                        return resolve("done");
+                    }
+
+                    requestId = requestAnimationFrame(draw);
+                    now = Date.now();
+                    delta = now - then;
+                    
+
+                    if (delta > interval) {
+                        currentTime += interval;
+                        then = now - (delta % interval);
+                        gl.uniform1f(millisecsPtr, currentTime);
+
+                        // Pre-Verse
+                        if (currentTime <= 19000) { 
+                            console.log(currentTime, "pre-verse")
+                            drawRectangle_2() 
+                        }
+
+                        // Verse 1
+                        if (currentTime > 19000 && currentTime <= 57000) { 
+                            console.log(currentTime, "verse 1")
+                            drawRectangle();
+                        }
+
+                        // Chorus 1
+                        if (currentTime > 57000 && currentTime <= 96000) {
+                            console.log(currentTime, "chorus 1")
+                            drawRectangle_3();
+                        }
+
+
+                        // Bridge 1
+                        if (currentTime > 96000 && currentTime <= 134000 ) {
+                            console.log(currentTime, "bridge 1")
+                            drawRectangle_2();
+                        }
+
+                        // Verse 2 
+                        if (currentTime > 134000 && currentTime <= 172500) {
+                            console.log(currentTime, "verse 2")
+                            drawRectangle();
+                        }
+
+                        // Chorus 2
+                        if (currentTime > 172500 && currentTime <= 181000) {
+                            console.log(currentTime, "chorus 2")
+                            drawRectangle_3();
+                        }
+
+                        // Bridge 2 
+                        if (currentTime > 181000) {
+                            console.log(currentTime, "bridge 2")
+                            drawRectangle_2();
+                        }
+
+                        img.file(currentIdx + ".png", document.getElementById("clock").toDataURL().split(',')[1], {base64: true});
+                        currentIdx++;
+
+                    }
+                }
+                draw()
+            })
+        }
         /**
-         * Generates png files from canvas element
+         * Generates png files from canvas element for text
          * @param {Array} word objects
          */
         async function generateFrameImages(words) {
@@ -406,6 +579,19 @@
             }
         }
 
+
+        /** 
+         * Event handler for animation generation 'load' event
+         * @param {Event}
+         */
+         async function generateAnimation(e) {
+             let result = await generateAnimationImages();
+             if (result === "done") {
+                 downloadZipFolder()
+             }
+         }
+
+         document.getElementById("generate-animation").addEventListener("click", generateAnimation)
         /**
          * Event handler for file reader 'error' event
          * @param {Event}
