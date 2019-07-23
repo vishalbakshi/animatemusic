@@ -13,7 +13,7 @@ app.use(cors())
 
 app.get('/', function(req, res){
   res.header("Access-Control-Allow-Origin", "*");
-  res.sendFile(__dirname + '/index2.html');
+  res.sendFile(__dirname + '/index3.html');
 });
 
 

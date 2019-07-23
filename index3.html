@@ -1,0 +1,739 @@
+<html>
+    <head>
+        <title>animate music</title>
+        <link rel="stylesheet" type="text/css" href="/index.css">
+        <script type="text/javascript" src="/jszip.min.js"></script>
+        <script type="text/javascript" src="/FileSaver.js"></script>
+        <script type="text/javascript" src="/anime.min.js"></script>
+    </head>
+    <body>
+        <h1>animate-music</h1>
+        <h2>convert forced-alignment data and song audio to a set of animated video .png frames</h2>
+        <!-- 
+
+        <img id="updated-image" />
+        <canvas id="image-test"></canvas>
+        -->
+        <canvas id="animation" width="1280" height="720" style="width: 1280px; height: 720px;"></canvas>
+        <canvas id="screen"></canvas>
+        <script id="vertex-shader" type="glsl">
+            attribute vec2 coord;
+            void main(void) {
+                gl_Position = vec4(coord, 0.0, 1.0);
+            }
+        </script>
+        <script id="fragment-shader" type="glsl">
+            uniform mediump vec4 color_vector;
+
+            void main(void) {
+                gl_FragColor = color_vector;
+            }
+        </script>
+
+        <script>
+        </script>
+        <audio id="audio-file" controls type="audio/wave"></audio>
+        <div id="input-container">
+            <button id="generate-animation" type="submit">Generate Animation</button>
+            <label for="song-upload-input">
+                full song wave file
+                <input type="file" id="song-input" name="song">
+            </label>
+            <label for="bpm">
+                song beats per minute (bpm)
+                <input type="number" id="bpm-input" name="bpm">
+            </label>
+            <label for="fps">
+                video frame rate (fps)
+                <input type="number" id="framerate-input" name="fps">
+            </label>
+            <label for="wpf">
+                words per frame
+                <input type="number" id="wordrate-input" name="wpf">
+            </label>
+            <label for="song-length-input">
+                audio duration (seconds)
+                <input type="number" id="duration-input" name="duration">
+            </label>
+            <label for="width">
+                video width (px)
+                <input type="number" id="width-input" name="width">
+            </label>
+            <label for="height">
+                video height (px)
+                <input type="number" id="height-input" name="height">
+            </label>
+            <label for="transcript-upload-input">
+                lyrics (.json, <a href="#" id="json-example" >example)</a>
+                <input type="file" id="transcript-input" name="transcript" multiple>
+        </label>
+            <!-- this should eventually trigger the whole process
+                <label for="submit">
+                    generate lyric frames
+                    <button name="submit" id="submit">generate</button>
+                </label>
+                
+            -->
+
+        </div>
+    </body>
+    <!--
+    <script>
+        window.onload = function() {
+            var c = document.createElement("canvas");
+            var ctx = c.getContext("2d");
+            var img = new Image();
+            img.src = "/veemo.jpg";
+            //================================================================
+            // this event will only get called after you have returned from this function
+            img.onload = function() {
+                console.log('LOADED');
+                let w = img.width/10;
+                let h = img.height/10;
+                ctx.drawImage(img, 0, 0, w, h);
+                var imgData = ctx.getImageData(0,0,w,h);
+                for (let i = 0; i < imgData.data.length; i+= 4) {
+                    imgData.data[i] = imgData.data[i] * 0.5;
+                    imgData.data[i + 1] = imgData.data[i + 1] * 0.8;
+                    imgData.data[i + 2] = imgData.data[i + 2] * 0.2;
+                    imgData.data[i + 3] = imgData.data[i + 3];
+                    console.log(i)
+                }
+                console.log('done!');
+                ctx.putImageData(imgData,0,0);
+                document.getElementById("updated-image").style.width = w;
+                document.getElementById("updated-image").style.height = h;
+                document.getElementById("updated-image").width = w;
+                document.getElementById("updated-image").height = h;
+                document.getElementById("updated-image").src = c.toDataURL("image/jpeg")
+            }
+        }
+
+    </script>
+    -->
+    <script>
+            // Started out as: https://jameshfisher.com/2017/10/05/webgl-fragment-shader-animation/
+            const animationCanvas = document.getElementById("animation");
+            const gl = animationCanvas.getContext("webgl")
+            gl.viewport(
+                0.5 * (animationCanvas.width - animationCanvas.height), 0,
+                animationCanvas.height, animationCanvas.height
+            );
+
+            const vertShader = gl.createShader(gl.VERTEX_SHADER);
+            gl.shaderSource(vertShader, document.getElementById('vertex-shader').innerText);
+            gl.compileShader(vertShader);
+            
+            const fragShader = gl.createShader(gl.FRAGMENT_SHADER);
+            gl.shaderSource(fragShader, document.getElementById('fragment-shader').innerText);
+            gl.compileShader(fragShader);
+            if (!gl.getShaderParameter(fragShader, gl.COMPILE_STATUS)) {
+                console.error("error: ", gl.getShaderInfoLog(fragShader));
+            }
+
+            const prog = gl.createProgram();
+            gl.attachShader(prog, vertShader);
+            gl.attachShader(prog, fragShader);
+            gl.linkProgram(prog);
+            gl.useProgram(prog);
+            
+            const vertBuf = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
+                   
+
+            const coordPtr = gl.getAttribLocation(prog, 'coord');
+            gl.vertexAttribPointer(coordPtr, 2, gl.FLOAT, false, 0, 0);
+            gl.enableVertexAttribArray(coordPtr);
+            gl.clearColor(1,0,0,1);
+            
+            //const millisecsPtr = gl.getUniformLocation(prog, 'millisecs');
+            const colorPtr = gl.getUniformLocation(prog, 'color_vector');
+            const factorPtr = gl.getUniformLocation(prog, 'factor');
+            //const coefPtr = gl.getUniformLocation(prog, 'coef');
+            //const redPtr = gl.getUniformLocation(prog, 'red');
+            //const greenPtr = gl.getUniformLocation(prog, 'green');
+            //const bluePtr = gl.getUniformLocation(prog, 'blue');
+            //const alphaPtr = gl.getUniformLocation(prog, 'alpha');
+
+            const start = new Date().getTime();
+            let beatCount = 1;
+            let squareVerticesFloat32Array;
+            let modifiedSquareVertices;
+            let c = 0;
+            const drawRectangle = () => {
+                if (c > 50) { c = 0}
+                let rows = 4;
+                let cols = 4;
+                let rowInc = 2.0 / rows;
+                let colInc = 2.0 / cols;
+                let pointTranslation = Math.random() / 10.0;
+                let squareSide = 2.0;
+                let squareSideSegments = 4;
+                let squareSideSegmentLength = squareSide / squareSideSegments;
+                let xStart = -1.0 * squareSide / 2.0;
+                let yStart = squareSide / 2.0;
+                let squareVertices = [];
+                
+                let x0 = -1.0 * 0.5;
+                let y0 = 0.5;
+                let delta = 0.25;
+                let dx;
+                let dy;
+                let currentX = x0;
+                let currentY = y0;
+                let randomizeX;
+                let randomizeY;
+                let randomizeSign;
+                
+
+                for (let i = 0; i < 4; i++) {
+                    if (i === 0) {
+                        dx = 0;
+                        dy = -1;
+                        randomizeSign = Math.random() < 0.5 ? -1.0 : 1.0;
+                        randomizeX = Math.random() * 0.001;
+                        
+                        for (let j = 0; j < 4; j++){
+                            currentX += dx * delta + randomizeSign * randomizeX;
+                            currentY += dy * delta;
+                            squareVertices.push(currentX);
+                            squareVertices.push(currentY);
+                        }
+                    }
+
+                    if (i === 1) {
+                        dx = 1;
+                        dy = 0;
+                        randomizeSign = Math.random() < 0.5 ? -1.0 : 1.0;
+                        randomizeY = Math.random() * 0.001;
+                        for (let j = 0; j < 4; j++){
+                            currentX += dx * delta;
+                            currentY += dy * delta + randomizeSign * randomizeY; 
+                            squareVertices.push(currentX);
+                            squareVertices.push(currentY);
+                        }
+                    }
+
+                    if (i === 2) {
+                        dx = 0;
+                        dy = 1;
+                        randomizeX = Math.random() * 0.001;
+                        randomizeSign = Math.random() < 0.5 ? -1.0 : 1.0;
+                        for (let j = 0; j < 4; j++){
+                            currentX += dx * delta + randomizeSign * randomizeX;
+                            currentY += dy * delta; 
+                            squareVertices.push(currentX);
+                            squareVertices.push(currentY);
+                        }
+                    }
+
+                    if (i === 3) {
+                        dx = -1;
+                        dy = 0;
+                        randomizeY = Math.random() * 0.001;
+                        randomizeSign = Math.random() < 0.5 ? -1.0 : 1.0;
+                        for (let j = 0; j < 4; j++){
+                            currentX += dx * delta;
+                            currentY += dy * delta + randomizeSign * randomizeY; 
+                            squareVertices.push(currentX);
+                            squareVertices.push(currentY);
+                        }
+                    }
+                }
+                
+                /*
+                squareVertices = [
+                    -0.5, 0.25,
+                    -0.5, 0,
+                    -0.5, -0.25,
+                    -0.5, -0.5,
+                    -0.25, -0.5,
+                    0, -0.5,
+                    0.25, -0.5,
+                    0.5, -0.5,
+                    0.5, -0.25,
+                    0.5, 0,
+                    0.5, 0.25,
+                    0.5, 0.5,
+                    0.25, 0.5,
+                    0, 0.5,
+                    -0.25, 0.5,
+                    -0.5, 0.5,
+                    -0.5, 0.25
+                ]
+                */
+                /*
+                for (let i = 0; i <= squareSideSegments; i++) {
+                    // Every row...
+                    for (let j = 0; j <= squareSideSegments; j++) {
+                    // Every column...
+                        let xCurrent = xStart + i * squareSideSegmentLength;
+                        let yCurrent = yStart - j * squareSideSegmentLength;
+                        let randomFactor = Math.random() < 0.5 ? 0.1 : - 0.1
+
+                        squareVertices.push(xCurrent + randomFactor);
+                        squareVertices.push(yCurrent + randomFactor);
+                    }
+                }
+                */
+                
+                //let squareVerticesFloat32Array;
+                //let modifiedSquareVertices;
+                
+                for (let i = 0; i < c; i ++) {
+                    modifiedSquareVertices = squareVertices.map((v) => ((i * i * .001 + 0.001) * v));
+                    squareVerticesFloat32Array = Float32Array.from(modifiedSquareVertices);
+                    //beatCount = beatCount % 4;
+                    gl.bufferData(gl.ARRAY_BUFFER, squareVerticesFloat32Array, gl.STATIC_DRAW);
+                    gl.drawArrays(gl.LINE_LOOP, 0, 16);
+                }
+                
+                c++;
+   
+                
+
+
+                //beatCount++;
+
+                /*
+                for (let j = 0; j < rows; j++){
+                    for (let i = 0; i < cols; i++) {
+                        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+                            x0 + i * rowInc, y0 - j * colInc,
+                            x0 + i * rowInc, y0 - colInc - j * colInc,
+                            x0 + rowInc + i * rowInc, y0 - colInc - j * colInc, 
+                            x0 + rowInc + i * rowInc, y0 - j * colInc
+                        ]), gl.STATIC_DRAW)
+                        gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+                    }
+                }
+                */
+            }
+            let bpm = 200;
+            let beatPeriod = 60000.0 / bpm;
+            window.setInterval(function() {
+                let red = Math.random() * 0.8;
+                let green = Math.random() * 0.5;
+                let blue = Math.random() * 0.2;
+                gl.uniform4fv(colorPtr, new Float32Array([red, green, blue, 1.0]))
+                //gl.uniform1f(millisecsPtr, (new Date().getTime()) - start);
+                drawRectangle();
+
+            }, 10);
+            
+            
+
+
+
+        /// 
+        const zip = new JSZip()
+        let canvas = document.getElementById('screen')
+        let ctx = canvas.getContext('2d')
+
+        // Prepare a folder for the frame PNGs
+        const img = zip.folder("images")
+
+        // Default Resolution 
+        let resolution = { height: 500, width: 500 }
+
+        // Canvas sizing
+        let scale = window.devicePixelRatio || 1
+        canvas.style.width = resolution.width + "px"
+        canvas.style.height = resolution.height + "px"
+        canvas.width = resolution.width * scale
+        canvas.height = resolution.height * scale
+        ctx.scale(scale, scale)
+
+        // Initial State of the App
+        let state = {
+            height: 500,
+            width: 500,
+            duration: 60,
+            fps: 30,
+            frames: 1800,
+            bpm: null,
+            wpf: 3
+        }
+
+        // Get Input Elements
+        const frameRateInput = document.getElementById('framerate-input')
+        const durationInput = document.getElementById("duration-input")
+        const beatsPerMinuteInput = document.getElementById("bpm-input")
+        const wordsPerFrameInput = document.getElementById("wordrate-input")
+        const transcriptInput = document.getElementById("transcript-input")
+        const videoWidthInput = document.getElementById("width-input")
+        const videoHeightInput = document.getElementById("height-input")
+        const songInput = document.getElementById("song-input")
+
+        // Define `input` Event Handler
+        const handleInputEvent = (e) => {
+            state[e.target.name] = e.target.value
+            
+            // update state.frames if fps or duration inputs change
+            if (e.target.name == "fps" || e.target.name == "duration") {
+                state.frames = state.fps * state.duration
+            }
+
+            // update canvas size if height or width inputs change
+            if (e.target.name == "height" || e.target.name == "width") {
+                canvas.style[e.target.name] = e.target.value + "px"
+                canvas[e.target.name] = e.target.value * scale
+                
+            }
+        }
+
+        // Attach Event Listener to Inputs
+        frameRateInput.addEventListener("input", handleInputEvent, false)
+        durationInput.addEventListener("input", handleInputEvent, false)
+        beatsPerMinuteInput.addEventListener("input", handleInputEvent, false)
+        wordsPerFrameInput.addEventListener("input", handleInputEvent, false)
+        videoWidthInput.addEventListener("input", handleInputEvent, false)
+        videoHeightInput.addEventListener("input", handleInputEvent, false)
+
+        // *** PARSE THE TRANSCRIPT *** //
+
+        /**
+         * Concatenate multiple words into one string
+         * @param {Array} word Objects
+         * @param {string} delimiter
+         * return {string}  single string of words
+         */
+        const concatenateWords = (words, delimiter) => {
+            return words.map((word) => word.alignedWord).join(delimiter)
+        }
+
+        /**
+         * Checks success case of words in a word set
+         * @param {Array} word Objects
+         * return {string} case status
+         */
+        const checkWordCase = (words) => {
+            return words.every((word) =>  word.case === "success" ) ? "success" : "not-in-audio"
+        }
+         
+        /**
+         * Create new word object
+         * Concatenate multiple words into a single string
+         * @param {Array} word objects
+         * return {Object} single word object
+         */
+        const restructureWord = (words) => {
+            return {
+                alignedWord: concatenateWords(words, " "),
+                case: checkWordCase(words),
+                end: words[words.length - 1].end,
+                end_ms: words[words.length - 1].end * 1000,
+                start: words[0].start,
+                start_ms: words[0].start * 1000
+            }
+        }
+
+        /**
+         * Restructure JSON transcript file 
+         * Group togther each set of wpf (number) words
+         * @param {Array} word Objects from JSON "words" property
+         * @param {number} wpf
+         */
+        const prepareWordSets = (words, wpf) => {
+            let wordSet = []
+            let restructuredWordSet = []
+
+            for (let i = 0; i < words.length; i++) {
+                if (wordSet.length > wpf - 1) { 
+                    restructuredWordSet.push(restructureWord(wordSet))
+                    wordSet = [] 
+                }
+
+                if (wordSet.length <= wpf) { wordSet.push(words[i]) }
+            }
+
+            return restructuredWordSet
+        }
+
+        /**
+         * Draw text onto canvas element
+         * @param {string} textAlign property
+         * @param {string} font size and name "50pt Arial"
+         * @param {string} fillStyle 
+         * @param {string} text to be drawn on canvas element
+         * return {string} image data URL
+         */
+        const drawCanvasFrame = (textAlign="center", font="36pt Arial", fillStyle="red", text="") => {
+            ctx.clearRect(0,0,state.width, state.height)
+            ctx.font = font
+            ctx.textAlign = textAlign
+            ctx.fillStyle = fillStyle
+            ctx.fillText(text, state.width/2, state.height/2)
+            
+            return document.getElementById('screen').toDataURL().split(',')[1]
+        }
+
+        /** 
+         * Generates png files form canvas element for animation
+         */
+
+        async function generateAnimationImages() {
+            return new Promise(resolve => {
+                let now;
+                let start = Date.now();
+                let then = Date.now();
+                let interval = 1000/state.fps;
+                let delta;
+                let currentIdx = 0;
+                let currentTime = 0;
+                let requestId;
+
+                function draw() {
+                    if (currentTime > 270000) {
+                        cancelAnimationFrame(requestId);
+                        return resolve("done");
+                    }
+
+                    requestId = requestAnimationFrame(draw);
+                    now = Date.now();
+                    delta = now - then;
+                    
+
+                    if (delta > interval) {
+                        currentTime += interval;
+                        then = now - (delta % interval);
+                        gl.uniform1f(millisecsPtr, currentTime);
+
+                        // Pre-Verse
+                        if (currentTime <= 19000) { 
+                            console.log(currentTime, "pre-verse")
+                            drawRectangle_2() 
+                        }
+
+                        // Verse 1
+                        if (currentTime > 19000 && currentTime <= 57000) { 
+                            console.log(currentTime, "verse 1")
+                            drawRectangle();
+                        }
+
+                        // Chorus 1
+                        if (currentTime > 57000 && currentTime <= 96000) {
+                            console.log(currentTime, "chorus 1")
+                            drawRectangle_3();
+                        }
+
+
+                        // Bridge 1
+                        if (currentTime > 96000 && currentTime <= 134000 ) {
+                            console.log(currentTime, "bridge 1")
+                            drawRectangle_2();
+                        }
+
+                        // Verse 2 
+                        if (currentTime > 134000 && currentTime <= 172500) {
+                            console.log(currentTime, "verse 2")
+                            drawRectangle();
+                        }
+
+                        // Chorus 2
+                        if (currentTime > 172500 && currentTime <= 181000) {
+                            console.log(currentTime, "chorus 2")
+                            drawRectangle_3();
+                        }
+
+                        // Bridge 2 
+                        if (currentTime > 181000) {
+                            console.log(currentTime, "bridge 2")
+                            drawRectangle_2();
+                        }
+
+                        img.file(currentIdx + ".png", document.getElementById("clock").toDataURL().split(',')[1], {base64: true});
+                        currentIdx++;
+
+                    }
+                }
+                draw()
+            })
+        }
+        /**
+         * Generates png files from canvas element for text
+         * @param {Array} word objects
+         */
+        async function generateFrameImages(words) {
+            return new Promise(resolve => {
+                let now
+                let start = Date.now()
+                let then = Date.now()
+                let interval = 1000/state.fps
+                let delta
+                let dataUrl
+                let wordToBeDrawn = ""
+                let currentIdx = 0
+                let requestID
+                let currentTime = 0
+
+                /**
+                * Callback for requestAnimation
+                * 
+                */
+                function draw() {
+                    if (currentIdx == 2000 || currentTime > 60000) {
+                        cancelAnimationFrame(requestId)
+                        return resolve("done")
+                    }
+  
+                    requestId = requestAnimationFrame(draw)
+                    now = Date.now()
+                    delta = now - then
+                    currentTime = now - start
+
+                    // Get word that is between (start - now) and (start  - now + interval)
+                    // If it's undefined, set to empty string for blank canvas frame
+                    wordToBeDrawn = words.filter((word) => (word.end_ms > currentTime) && (word.start_ms <= currentTime))
+                    wordToBeDrawn = wordToBeDrawn[0] ? wordToBeDrawn[0].alignedWord : ""
+
+                    if (delta > interval) {
+                        // in order to keep `now - then` at `interval` for each frame
+                        then = now - (delta % interval)
+                        let canvasDataUrl = drawCanvasFrame("center", "36pt Arial", "dodgerblue", wordToBeDrawn)
+                        img.file(currentIdx + ".png", canvasDataUrl, {base64: true})
+                        currentIdx++
+
+                    }
+                }
+                draw()
+            })
+
+        }
+
+        /**
+         * Downloads zipped image files from browser
+         */
+        const downloadZipFolder = () => {
+            zip.generateAsync({type: 'blob'})
+                .then((blob) => {
+                    // Add FileSaver.js script at the top to expose
+                    // saveAs global
+                    saveAs(blob, 'frames.zip')
+                })
+                .catch((err) => { console.error(err) })
+        }
+
+        /**
+         * Event handler for file reader 'load' event
+         * @param {Event} 
+         */
+        async function loadTranscriptFile(e) {
+            let fileContents = JSON.parse(e.target.result)
+            let transcript = fileContents.transcript
+            let words = prepareWordSets(fileContents.words, state.wpf)
+            let result = await generateFrameImages(words)
+            if (result === "done") { 
+                downloadZipFolder()
+            }
+        }
+
+
+        /** 
+         * Event handler for animation generation 'load' event
+         * @param {Event}
+         */
+         async function generateAnimation(e) {
+             let result = await generateAnimationImages();
+             if (result === "done") {
+                 downloadZipFolder()
+             }
+         }
+
+         document.getElementById("generate-animation").addEventListener("click", generateAnimation)
+        /**
+         * Event handler for file reader 'error' event
+         * @param {Event}
+         */
+        const errorTranscriptFile = (e) => {
+            document.getElementById("message").textContent = "error reading transcript"
+            console.error("erorr reading transcript")
+        }
+
+        /**
+         * Event handler for transcript file input
+         * @param {Event} input event
+         */
+        const handleTranscriptFile = (e) => {
+            const file = event.target.files[0]
+            if (file) {
+                const reader = new FileReader()
+                reader.readAsText(file, 'UTF-8')
+                reader.onload = loadTranscriptFile
+                reader.onerror = errorTranscriptFile
+            }
+        }
+
+        // Attach file input transcript handler
+        transcriptInput.addEventListener("input", handleTranscriptFile, false)
+
+        // *** AUDIO STUFF *** //
+
+        /**
+         * Event handler for song file input
+         * @param {Event} input event
+         */
+         const handleAudioFile = (e) => {
+             const file = event.target.files[0]
+             if (file) {
+                 const audioUrl = URL.createObjectURL(file)
+                 let audioElement = document.getElementById("audio-file")
+                 audioElement.src = audioUrl
+                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+                 const audioSrc = audioCtx.createMediaElementSource(audioElement)
+                 const analyser = audioCtx.createAnalyser()
+
+                 audioSrc.connect(analyser)
+                 audioSrc.connect(audioCtx.destination)
+                 analyser.fftSize = 2048
+                 const bufferLength = analyser.frequencyBinCount
+                 const dataArray = new Uint8Array(bufferLength)
+                 analyser.getByteTimeDomainData(dataArray)
+                
+                 
+
+                 const draw = () => {
+                     drawVisual = requestAnimationFrame(draw)
+                     analyser.getByteTimeDomainData(dataArray)
+
+                     ctx.fillStyle = 'rgb(200,200,200)'
+                     ctx.fillRect(0,0,canvas.width, canvas.height)
+                     ctx.lineWidth = 2
+                     ctx.strokeStyle = 'rgb(0,0,0)'
+
+                     ctx.beginPath()
+
+                     var sliceWidth = canvas.width * 1.0 / bufferLength
+                     var x = 0
+
+                    
+                     for (let i = 0; i < bufferLength; i++) {
+                         let v = dataArray[i] / 128.0
+                         let y = v * canvas.height / 2
+
+                         if (i === 0) {
+                             ctx.moveTo(x, y)
+                         } else {
+                             ctx.lineTo(x, y)
+                         }
+
+                         x += sliceWidth
+                        
+                     }
+                     
+                     ctx.lineTo(canvas.width, canvas.height/2)
+                     ctx.stroke()
+   
+                     
+                 }
+                 draw()
+
+                 
+             }
+         }
+         songInput.addEventListener("change", handleAudioFile, false)
+
+
+
+    </script>
+</html>
