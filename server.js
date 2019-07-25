@@ -8,12 +8,17 @@ const zip = new JSZip()
 // const img = zip.folder("images")
 
 // middleware
+app.use(function(req, res, next) {
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000/');
+  next();
+});
 app.use(express.static(__dirname + '/dist'))
 app.use(cors())
 
+
+
 app.get('/', function(req, res){
-  res.header("Access-Control-Allow-Origin", "*");
-  res.sendFile(__dirname + '/index3.html');
+  res.sendFile(__dirname + '/index5.html');
 });
 
 
