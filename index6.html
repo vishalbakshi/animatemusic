@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Graphics Editor</title>
+    </head>
+	<body>
+        <input 
+            type="file"
+            name="image-upload"
+            id="face-image"
+        />
+        <canvas id="drawing-canvas"></canvas>
+    </body>
+    <script>
+        <script>
+        window.onload = function() {
+            var c = document.createElement("canvas");
+            var ctx = c.getContext("2d");
+            var img = new Image();
+            img.src = "/veemo.jpg";
+            //================================================================
+            // this event will only get called after you have returned from this function
+            img.onload = function() {
+                console.log('LOADED');
+                let w = img.width/10;
+                let h = img.height/10;
+                ctx.drawImage(img, 0, 0, w, h);
+                console.log('done!');
+                ctx.putImageData(imgData,0,0);
+                document.getElementById("updated-image").style.width = w;
+                document.getElementById("updated-image").style.height = h;
+                document.getElementById("updated-image").width = w;
+                document.getElementById("updated-image").height = h;
+                document.getElementById("updated-image").src = c.toDataURL("image/jpeg")
+            }
+        }
+
+    </script>
+    </script>
+    <script>
+        let points = [];
+        const canvas = document.getElementById("drawing-canvas");
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 500;
+        canvas.height = 500;
+        canvas.style.width = "500px";
+        canvas.style.height = "500px";
+        canvas.style.background = "white";
+        canvas.style.border = "1px solid black";
+        ctx.beginPath();
+        canvas.onmousedown = (e) => {
+                      
+            // get mouse position coordinates
+            let currentPoint = {
+                x: e.clientX - canvas.getBoundingClientRect().left,
+                y: e.clientY - canvas.getBoundingClientRect().top
+            };
+         
+
+            points.push(currentPoint);
+            if (points.length > 1) {
+                if ( Math.abs(currentPoint.x - points[0].x) < 50 &&
+                     Math.abs(currentPoint.y - points[0].y) < 50) {
+                    currentPoint.x = points[0].x;
+                    currentPoint.y = points[0].y;
+
+                    // Loop has been closed, clear the points
+                    ctx.lineTo(currentPoint.x, currentPoint.y);
+                    ctx.stroke();
+                    ctx.closePath();
+                    points = []; 
+                    debugger 
+                }
+                    
+            };
+            
+            if (points.length > 1) {
+                ctx.lineTo(currentPoint.x, currentPoint.y);
+                ctx.stroke();
+            }
+            ctx.moveTo(currentPoint.x, currentPoint.y);
+            console.log(points)
+            
+        }
+        
+
+    </script>
+</html>
