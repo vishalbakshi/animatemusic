@@ -5,6 +5,8 @@
         <script type="text/javascript" src="/jszip.min.js"></script>
         <script type="text/javascript" src="/FileSaver.js"></script>
         <script type="text/javascript" src="/anime.min.js"></script>
+        <script type="text/javascript" src="/vbak_coordinator.js"></script>
+        <script type="text/javascript" src="/vbak_1920x1080_hair.js"></script>
     </head>
     <body>
         <h1>animate-music</h1>
@@ -14,12 +16,18 @@
         <img id="updated-image" />
         <canvas id="image-test"></canvas>
         -->
-        <canvas id="animation" width="1280" height="720" style="width: 1280px; height: 720px;"></canvas>
+        <canvas id="animation" width="1920" height="1080" style="width: 1920px; height: 1080px;"></canvas>
         <canvas id="screen"></canvas>
         <script id="vertex-shader" type="glsl">
             attribute vec2 coord;
+            uniform vec2 u_resolution;
+
             void main(void) {
-                gl_Position = vec4(coord, 0.0, 1.0);
+                vec2 zeroToOne = coord / u_resolution;
+                vec2 zeroToTwo = zeroToOne * 2.0;
+                vec2 clipSpace = zeroToTwo - 1.0;
+
+                gl_Position = vec4(clipSpace * vec2(1, -1), 0.0, 1.0);
             }
         </script>
         <script id="fragment-shader" type="glsl">
@@ -135,17 +143,21 @@
             gl.attachShader(prog, vertShader);
             gl.attachShader(prog, fragShader);
             gl.linkProgram(prog);
+            var linked = gl.getProgramParameter(prog, gl.LINK_STATUS);
+            if (!linked) {
+                console.error(gl.getProgramInfoLog(prog));
+            }
             gl.useProgram(prog);
             
             const vertBuf = gl.createBuffer();
             gl.bindBuffer(gl.ARRAY_BUFFER, vertBuf);
                    
-
             const coordPtr = gl.getAttribLocation(prog, 'coord');
             gl.vertexAttribPointer(coordPtr, 2, gl.FLOAT, false, 0, 0);
             gl.enableVertexAttribArray(coordPtr);
             gl.clearColor(1,0,0,1);
             
+            let resolutionUniformLocation = gl.getUniformLocation(prog, "u_resolution");
             //const millisecsPtr = gl.getUniformLocation(prog, 'millisecs');
             const colorPtr = gl.getUniformLocation(prog, 'color_vector');
             const factorPtr = gl.getUniformLocation(prog, 'factor');
@@ -155,11 +167,23 @@
             //const bluePtr = gl.getUniformLocation(prog, 'blue');
             //const alphaPtr = gl.getUniformLocation(prog, 'alpha');
 
+            gl.uniform2f(resolutionUniformLocation, gl.canvas.width, gl.canvas.height);
+
             const start = new Date().getTime();
             let beatCount = 1;
             let squareVerticesFloat32Array;
             let modifiedSquareVertices;
             let c = 0;
+            // let coordinator_data = window.coordinator_json.flat();
+            // let coordinator_max = Math.max.apply(null, coordinator_data);
+            // let coordinator_min = Math.min.apply(null, coordinator_data);
+            let hair_coordinates = window.vbak_hair_coordinates.flat();
+            const drawVBAK = () => {
+                let verticesFloat32Array = Float32Array.from(hair_coordinates);
+                    //beatCount = beatCount % 4;
+                gl.bufferData(gl.ARRAY_BUFFER, verticesFloat32Array, gl.STATIC_DRAW);
+                gl.drawArrays(gl.LINE_LOOP, 0, 60);
+            }
             const drawRectangle = () => {
                 if (c > 50) { c = 0}
                 let rows = 4;
@@ -317,9 +341,10 @@
                 let blue = Math.random() * 0.2;
                 gl.uniform4fv(colorPtr, new Float32Array([red, green, blue, 1.0]))
                 //gl.uniform1f(millisecsPtr, (new Date().getTime()) - start);
-                drawRectangle();
+                // drawRectangle();
+                drawVBAK();
 
-            }, 10);
+            }, 600);
             
             
 
