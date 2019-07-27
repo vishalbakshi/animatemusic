@@ -7,10 +7,53 @@
     </head>
     <script type="text/javascript" src="/vbak_1920x1080_hair.js"></script>
     <body>
+        <canvas id="canvas" width="10" height="15" style="width: 400px; height: 300px;"></canvas>
+        <!-- vertex shader -->
+        <script id="vertex-shader" type="x-shader/x-vertex">
+        attribute vec2 a_position;
 
+        uniform mat3 u_matrix;
+
+        void main() {
+            // Multiply the position by the matrix.
+            // gl_Position = vec4((u_matrix * vec3(a_position, 1)).xy, 0, 1);
+            gl_Position = vec4(a_position, 0, 1);
+        }
+        </script>
+        <!-- fragment shader -->
+        <script id="fragment-shader" type="x-shader/x-fragment">
+        #ifdef GL_ES
+        precision mediump float;
+        #endif
+
+        uniform vec2 u_resolution;
+        uniform vec2 u_mouse;
+        uniform float u_time;
+        uniform vec4 u_color;
+
+        // Plot a line on Y using a value between 0.0-1.0
+        float plot(vec2 st, float pct) {
+            return smoothstep( pct-0.02, pct, st.y)  - 
+                   smoothstep( pct, pct+0.02, st.y);
+        }
+
+        void main() {
+            vec2 st = gl_FragCoord.xy/u_resolution;
+            float y = st.x;
+            vec3 color = vec3(y);
+
+            // Plot a line
+            float pct = plot(st, y);
+            color = (1.0-pct)*color+pct*vec3(0.0,1.0,0.0);
+
+            gl_FragColor = vec4(color, 1.0);
+        }
+        </script>
     </body>
-    <script src="resources/webgl-utils.js"></script>
+    <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
+    <script src="https://webglfundamentals.org/webgl/resources/m3.js"></script>
     <script>
+        "use strict";
         /** 
          * Creates and compiles a shader. 
          * 
@@ -118,6 +161,108 @@
             return createProgram(gl, vertexShader, fragmentShader);
 
         }
+
+        const main = () => {
+            // Get a WebGL context
+            /** @type {HTMLCanvasElement} */
+            let canvas = document.getElementById("canvas");
+            let gl = canvas.getContext("webgl");
+            if (!gl) {
+                return;
+            }
+
+            // Shader Script IDs
+            let shaderScriptIds = ["vertex-shader", "fragment-shader"];
+
+            // Setup GLSL program
+            let program = createProgramFromScripts(gl, shaderScriptIds);
+            gl.useProgram(program);
+
+            // Look up where the vertex data needs to go.
+            let positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+
+            // Look up uniforms.
+            let colorLocation = gl.getUniformLocation(program, "u_color");
+            let matrixLocation = gl.getUniformLocation(program, "u_matrix");
+            let resolutionLocation = gl.getUniformLocation(program, "u_resolution");
+
+            // Create a buffer to put the points
+            let positionBuffer = gl.createBuffer();
+
+            // Bind it to ARRAY_BUFFER
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+            requestAnimationFrame(drawScene);
+
+            // Draw the scene.
+            function drawScene(now) {
+                now *= 0.001; // convert to seconds
+
+                // Tell WebGL how to convert from clip space to pixels
+                gl.viewport(0,0,gl.canvas.width, gl.canvas.height);
+
+                // Clear the canvas
+                gl.clear(gl.COLOR_BUFFER_BIT);
+
+                // Tell it to use our program (pair of shaders)
+                gl.useProgram(program);
+
+                // Turn on the attribute
+                gl.enableVertexAttribArray(positionAttributeLocation);
+
+                // Bind the position buffer.
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+                // Tell the attribute how to get data out of positionBuffer (ARRAY_BUFFER)
+                let size = 2;
+                let type = gl.FLOAT;
+                let normalize = false;
+                let stride = 0;
+                let offset = 0;
+                gl.vertexAttribPointer(
+                    positionAttributeLocation, size, type, normalize, stride, offset);
+
+                // Set geometry
+                let radius = Math.sqrt(gl.canvas.width * gl.canvas.width + gl.canvas.height * gl.canvas.height * gl.canvas.height) * 0.5;
+                let angle = now;
+                let x = Math.cos(angle) * radius;
+                let y = Math.sin(angle) * radius;
+                let centerX = gl.canvas.width / 2;
+                let centerY = gl.canvas.height / 2;
+                //setGeometry(gl, centerX + x, centerY + y, centerX - x, centerY - y);
+
+                // Compute the matrices
+                var projectionMatrix = m3.projection(gl.canvas.width, gl.canvas.height);
+
+                // Set the matrix.
+                gl.uniformMatrix3fv(matrixLocation, false, projectionMatrix);
+
+                // Draw in red
+                gl.uniform4fv(colorLocation, [1, 0, 0, 1]);
+
+                // Set resolution
+                gl.uniform2fv(resolutionLocation, [gl.canvas.width, gl.canvas.height]);
+
+                // Draw the geometry.
+                let primitiveType = gl.LINES;
+                let geometryOffset = 0;
+                let count = 2;
+                // gl.drawArrays(primitiveType, geometryOffset, count);
+
+                requestAnimationFrame(drawScene);
+            }
+        }
+
+        const setGeometry = (gl, x1, y1, x2, y2) => {
+            gl.bufferData(
+                gl.ARRAY_BUFFER,
+                new Float32Array([
+                    x1, y1,
+                    x2, y2]),
+                gl.STATIC_DRAW);
+        }
+
+        main();
     </script>
     
 </html>
