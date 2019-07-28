@@ -6,18 +6,31 @@
         <title>Graphics Editor</title>
     </head>
     <script type="text/javascript" src="/vbak_1920x1080_hair.js"></script>
+    <style>
+        .gman-widget-label {
+            font-family: "Courier New";
+        }  
+    </style>
+    
     <body>
-        <canvas id="canvas" width="10" height="15" style="width: 400px; height: 300px;"></canvas>
+        <canvas id="canvas" width="400" height="300" style="width: 400px; height: 300px;"></canvas>
+        <div id="ui">
+            <div id="u_linewidth"></div>
+            <div id="u_color_coef"></div>
+            <div id="u_smoothstep_coef_1"></div>
+            <div id="u_smoothstep_coef_2"></div>
+            <div id="u_resolution_coef"></div>
+            <div id="u_y_coef"></div>
+            <div id="u_triangles"></div>
+        </div>
         <!-- vertex shader -->
         <script id="vertex-shader" type="x-shader/x-vertex">
         attribute vec2 a_position;
 
-        uniform mat3 u_matrix;
-
         void main() {
             // Multiply the position by the matrix.
             // gl_Position = vec4((u_matrix * vec3(a_position, 1)).xy, 0, 1);
-            gl_Position = vec4(a_position, 0, 1);
+            gl_Position = vec4(a_position.xy, 0.0, 1.0);
         }
         </script>
         <!-- fragment shader -->
@@ -30,21 +43,27 @@
         uniform vec2 u_mouse;
         uniform float u_time;
         uniform vec4 u_color;
+        uniform float u_linewidth;
+        uniform float u_color_coef;
+        uniform float u_smoothstep_coef_1;
+        uniform float u_smoothstep_coef_2;
+        uniform float u_resolution_coef;
+        uniform float u_y_coef;
 
         // Plot a line on Y using a value between 0.0-1.0
         float plot(vec2 st, float pct) {
-            return smoothstep( pct-0.02, pct, st.y)  - 
-                   smoothstep( pct, pct+0.02, st.y);
+            return u_smoothstep_coef_1 * smoothstep( pct-u_linewidth, pct, st.y)  - 
+                    u_smoothstep_coef_2 * smoothstep( pct, pct+u_linewidth, st.y);
         }
 
         void main() {
-            vec2 st = gl_FragCoord.xy/u_resolution;
-            float y = st.x;
+            vec2 st = gl_FragCoord.xy/ ( u_resolution_coef * u_resolution);
+            float y = u_y_coef * st.x;
             vec3 color = vec3(y);
 
             // Plot a line
             float pct = plot(st, y);
-            color = (1.0-pct)*color+pct*vec3(0.0,1.0,0.0);
+            color = (u_color_coef-pct)*color+pct*vec3(0.0,1.0,0.0);
 
             gl_FragColor = vec4(color, 1.0);
         }
@@ -52,6 +71,7 @@
     </body>
     <script src="https://webglfundamentals.org/webgl/resources/webgl-utils.js"></script>
     <script src="https://webglfundamentals.org/webgl/resources/m3.js"></script>
+    <script type="text/javascript" src="/webgl-lessons-ui.js"></script>
     <script>
         "use strict";
         /** 
@@ -185,15 +205,81 @@
             let colorLocation = gl.getUniformLocation(program, "u_color");
             let matrixLocation = gl.getUniformLocation(program, "u_matrix");
             let resolutionLocation = gl.getUniformLocation(program, "u_resolution");
-
+            let linewidthLocation = gl.getUniformLocation(program, "u_linewidth");
+            let colorCoefLocation = gl.getUniformLocation(program, "u_color_coef")
+            let smoothstepCoef1Location = gl.getUniformLocation(program, "u_smoothstep_coef_1");
+            let smoothstepCoef2Location = gl.getUniformLocation(program, "u_smoothstep_coef_2");
+            let resolutionCoefficient = gl.getUniformLocation(program, "u_resolution_coef");
+            let yCoefficient = gl.getUniformLocation(program, "u_y_coef");
+            gl.uniform1f(yCoefficient, 1.0);
+            gl.uniform1f(resolutionCoefficient, 1.0);
+            gl.uniform1f(linewidthLocation, 0.02)
+            gl.uniform1f(colorCoefLocation, 1.0)
+            gl.uniform1f(smoothstepCoef1Location, 1.0);
+            gl.uniform1f(smoothstepCoef2Location, 1.0);
+            
             // Create a buffer to put the points
             let positionBuffer = gl.createBuffer();
 
             // Bind it to ARRAY_BUFFER
             gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
-            requestAnimationFrame(drawScene);
+            drawScene();
 
+            // Setup a UI
+            webglLessonsUI.setupSlider("#u_linewidth", { value: 0.02, slide: updateValue(0.02), max: 1.0, step: 0.01 })
+            function updateValue(value) {
+                return function(event, ui) {
+                    gl.uniform1f(linewidthLocation, ui.value);
+                    // requestAnimationFrame(drawScene);
+                    drawScene();
+                }
+            };
+
+            webglLessonsUI.setupSlider("#u_color_coef", { value: 1.0, slide: updateColorCoef(1.0), max: 1.0, min: 0.0, step: 0.01})
+            function updateColorCoef(value) {
+                return function(event, ui) {
+                    gl.uniform1f(colorCoefLocation, ui.value);
+                    //requestAnimationFrame(drawScene);
+                    drawScene();
+                }
+            };
+
+            webglLessonsUI.setupSlider("#u_smoothstep_coef_1", { value: 1.0, slide: updateColorCoef(1.0), max: 1.0, min: 0.0, step: 0.01})
+            function updateColorCoef(value) {
+                return function(event, ui) {
+                    gl.uniform1f(smoothstepCoef1Location, ui.value);
+                    //requestAnimationFrame(drawScene);
+                    drawScene();
+                }
+            }
+            webglLessonsUI.setupSlider("#u_smoothstep_coef_2", { value: 1.0, slide: updateColorCoef(1.0), max: 1.0, min: 0.0, step: 0.01})
+            function updateColorCoef(value) {
+                return function(event, ui) {
+                    gl.uniform1f(smoothstepCoef2Location, ui.value);
+                    //requestAnimationFrame(drawScene);
+                    drawScene();
+                }
+            };
+            webglLessonsUI.setupSlider("#u_resolution_coef", { value: 1.0, slide: updateResolutionCoef(1.0), max: 1.0, min: 0.0, max: 10.0, step: 0.01})
+            function updateResolutionCoef(value) {
+                return function(event, ui) {
+                    gl.uniform1f(resolutionCoefficient, ui.value);
+                    // requestAnimationFrame(drawScene);
+                    drawScene();
+                }
+            };
+
+            // Use this to update triangles
+            let triangle_count = 2.0;
+            webglLessonsUI.setupSlider("#u_triangles", { value: 2.0, slide: updateTriangles(2.0), min: 2.0, max: 100.0, step: 2.0})
+            function updateTriangles(value) {
+                return function(event, ui) {
+                    // add the function to change number of triangles rendered
+
+                    drawScene();
+                }
+            };
             // Draw the scene.
             function drawScene(now) {
                 now *= 0.001; // convert to seconds
@@ -229,8 +315,11 @@
                 let y = Math.sin(angle) * radius;
                 let centerX = gl.canvas.width / 2;
                 let centerY = gl.canvas.height / 2;
-                //setGeometry(gl, centerX + x, centerY + y, centerX - x, centerY - y);
+                
+                
+                // Add draw array here
 
+                
                 // Compute the matrices
                 var projectionMatrix = m3.projection(gl.canvas.width, gl.canvas.height);
 
@@ -244,12 +333,12 @@
                 gl.uniform2fv(resolutionLocation, [gl.canvas.width, gl.canvas.height]);
 
                 // Draw the geometry.
-                let primitiveType = gl.LINES;
+                let primitiveType = gl.TRIANGLES;
                 let geometryOffset = 0;
-                let count = 2;
-                // gl.drawArrays(primitiveType, geometryOffset, count);
+                let count = 6;
+                gl.drawArrays(primitiveType, geometryOffset, count);
 
-                requestAnimationFrame(drawScene);
+                // requestAnimationFrame(drawScene);
             }
         }
 
@@ -257,12 +346,18 @@
             gl.bufferData(
                 gl.ARRAY_BUFFER,
                 new Float32Array([
-                    x1, y1,
-                    x2, y2]),
+                    -1.0, -1.0,
+                    1.0, -1.0,
+                    1.0, 1.0,
+                    -1.0, 1.0,
+                    -1.0, -1.0,
+                    1.0, 1.0
+                ]),
                 gl.STATIC_DRAW);
         }
 
         main();
     </script>
+    
     
 </html>
