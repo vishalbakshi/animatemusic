@@ -1,13 +1,11 @@
 # animatemusic
 
-currently: a script that converts force-aligned lyrics to video frames
+a JS library for musicians and artists.
 
-future: a script that converts fore-aligned lyrics and animation (driven by song file) to video frames
-
-## Installation
-
-- Clone the repo.
-- From the root directory, `npm install`
-- Open `localhost:3000` in a browser
-- Provide the inputs
-- Receive an output `.zip` file
+## Core Functionality
+- Generate `.png` video frames for download in a `.zip` file
+  - Lyric text are rendered on frames based on user-uploaded gentle JSON output
+  - Animations rendered on frames based on user-input bpm
+- Allow use to select animations they wish to include in their video at given times
+- Allow contributors to add shader functions to the library of animations
+- Allow contributors to add custom `draw()` functions for their own animation logic
