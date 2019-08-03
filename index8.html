@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+    <canvas id="canvas" width="676" height="653"></canvas>
+</body>
+<script>
+        let img_data = new Image()
+        let canvas = document.getElementById("canvas")
+        canvas.width = 676/3
+        canvas.height = 653/3
+        let ctx = canvas.getContext("2d")
+        let x = 0
+        let y = 0
+        let coordinates = [
+            [-2*676/3, -653/3],
+            [-2*676/3,0],
+            [-676/3,-653/3]
+        ]
+        let currentIdx = 0
+        let count = 0
+        img_data.onload = animate 
+        img_data.src = "https://thepracticaldev.s3.amazonaws.com/i/iubpy8p58bkfg7vwvxoh.jpg"
+        function animate() {
+            if (count == 25) {
+                currentIdx++
+                currentIdx %= 3
+                count = 0
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            ctx.drawImage(img_data, coordinates[currentIdx][0], coordinates[currentIdx][1])
+            
+            count++
+            requestAnimationFrame(animate)
+        }
+    </script>
+</html>

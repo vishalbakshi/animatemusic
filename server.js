@@ -18,7 +18,7 @@ app.use(cors())
 
 
 app.get('/', function(req, res){
-  res.sendFile(__dirname + '/index7.html');
+  res.sendFile(__dirname + '/index8.html');
 });
 
 
